@@ -132,6 +132,7 @@ class PgApiImpl {
   void Interrupt();
 
   void ResetCatalogReadTime();
+  void SetCatalogInTxnLimit(uint64_t in_txn_limit_ht);
   [[nodiscard]] ReadHybridTime GetCatalogReadTime() const;
 
   uint64_t GetSessionID() const { return pg_client_.SessionID(); }

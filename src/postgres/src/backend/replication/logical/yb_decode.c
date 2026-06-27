@@ -566,10 +566,26 @@ YBHandleRelcacheRefresh(LogicalDecodingContext *ctx, XLogReaderState *record)
 		case YB_PG_ROW_MESSAGE_ACTION_DDL:
 			{
 				bool		found;
+				uint64_t	ddl_commit_time_ht;
 
 				/*
-				 * Mark for relcache invalidation to be done on first DML by just
-				 * inserting an entry for the table_oid.
+				 * For transactional DDL, DDL records may be interleaved with
+				 * DMLs that share the same commit_time_ht. Advancing
+				 * yb_read_time to the next DML's commit time is incorrect in
+				 * that case. Instead invalidate caches now and set the catalog
+				 * session in_txn_limit so subsequent catalog lookups observe
+				 * same-transaction catalog writes up to this DDL.
+				 */
+				ddl_commit_time_ht = record->yb_virtual_wal_record->commit_time_ht;
+				elog(DEBUG2,
+					 "DDL record for table %u: set catalog in_txn_limit to "
+					 "commit_time_ht %" PRIu64 " and invalidate relcache",
+					 table_oid, ddl_commit_time_ht);
+				YBCSetCatalogInTxnLimitAndInvalidateRelcache(ddl_commit_time_ht);
+
+				/*
+				 * Mark that the next DML for this table should emit a RELATION
+				 * (schema change) notification to the output plugin.
 				 */
 				hash_search(ctx->yb_needs_relcache_invalidation, &table_oid,
 							HASH_ENTER, &found);
@@ -582,27 +598,17 @@ YBHandleRelcacheRefresh(LogicalDecodingContext *ctx, XLogReaderState *record)
 			yb_switch_fallthrough();
 		case YB_PG_ROW_MESSAGE_ACTION_DELETE:
 			{
-				bool		needs_invalidation = false;
+				bool		needs_schema_change = false;
 
 				hash_search(ctx->yb_needs_relcache_invalidation, &table_oid,
-							HASH_FIND, &needs_invalidation);
+							HASH_FIND, &needs_schema_change);
 
-				if (needs_invalidation)
+				if (needs_schema_change)
 				{
-					uint64_t	read_time_ht;
-
-					/* Use the commit_time_ht of the DML. */
-					read_time_ht = record->yb_virtual_wal_record->commit_time_ht;
-
-					elog(DEBUG2,
-						 "Setting yb_read_time to record's commit_time_ht: %" PRIu64,
-						 read_time_ht);
-					YBCUpdateYbReadTimeAndInvalidateRelcache(read_time_ht);
-
 					/*
-					 * Let the plugin know that the schema for this table has
-					 * changed, so it must send the new relation object to the
-					 * client.
+					 * Caches and catalog in_txn_limit were already updated when
+					 * the DDL record was processed. Only notify the plugin so it
+					 * sends an updated RELATION message before this DML.
 					 */
 					YBReorderBufferSchemaChange(ctx->reorder, table_oid);
 

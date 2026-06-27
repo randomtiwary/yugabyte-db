@@ -81,6 +81,10 @@ class PgSession final : public std::enable_shared_from_this<PgSession> {
   // Resets the read point for catalog tables.
   // Next catalog read operation will read the very latest catalog's state.
   void ResetCatalogReadPoint();
+  // Updates only the in_txn_limit on catalog_read_time_ (preserving read/local/global limits
+  // when already set). Used by logical replication walsender after DDL records so subsequent
+  // catalog reads can observe same-txn catalog writes up to the given hybrid time.
+  void SetCatalogInTxnLimit(HybridTime in_txn_limit_ht);
   [[nodiscard]] const ReadHybridTime& catalog_read_time() const { return catalog_read_time_; }
 
   //------------------------------------------------------------------------------------------------

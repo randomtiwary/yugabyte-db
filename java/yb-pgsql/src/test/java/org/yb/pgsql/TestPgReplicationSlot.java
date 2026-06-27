@@ -5936,4 +5936,140 @@ public class TestPgReplicationSlot extends BasePgSQLTest {
       return res.getLong("yb_restart_commit_ht");
     }
   }
+
+  /**
+   * Transactional DDL: ALTER TABLE ADD/DROP COLUMN interleaved with INSERTs inside a single
+   * transaction block must stream correctly through logical replication (virtual WAL + walsender).
+   * Walsender must invalidate caches and set catalog in_txn_limit on DDL records rather than
+   * advancing yb_read_time only on the next DML.
+   */
+  @Test
+  public void testTransactionalDdlAlterTableInTxnBlock() throws Exception {
+    Map<String, String> tserverFlags = getTServerFlags();
+    tserverFlags.put("ysql_yb_ddl_transaction_block_enabled", "true");
+    tserverFlags.put("ysql_yb_enable_implicit_dynamic_tables_logical_replication", "true");
+    // Ensure preview flag is allowed if required by the build.
+    String allowedPreview = tserverFlags.getOrDefault("allowed_preview_flags_csv", "");
+    if (!allowedPreview.contains("ysql_yb_enable_ddl_savepoint_support")) {
+      // ddl_transaction_block itself is not always a preview flag; keep existing list.
+    }
+    restartClusterWithFlags(getMasterFlags(), tserverFlags);
+
+    final String slotName = "test_txn_ddl_slot";
+    final String pluginName = YB_OUTPUT_PLUGIN_NAME;
+
+    try (Statement stmt = connection.createStatement()) {
+      stmt.execute("DROP TABLE IF EXISTS txn_ddl_t");
+      stmt.execute("CREATE TABLE txn_ddl_t (a int primary key, b int)");
+      stmt.execute("CREATE PUBLICATION pub FOR ALL TABLES");
+    }
+
+    PGReplicationConnection replConnection = getConnectionBuilder().withTServer(0)
+                                                .replicationConnect()
+                                                .unwrap(PGConnection.class)
+                                                .getReplicationAPI();
+    createSlot(replConnection, slotName, pluginName);
+
+    PGReplicationStream stream = replConnection.replicationStream()
+                                     .logical()
+                                     .withSlotName(slotName)
+                                     .withStartPosition(LogSequenceNumber.valueOf(0L))
+                                     .withSlotOption("proto_version", 1)
+                                     .withSlotOption("publication_names", "pub")
+                                     .start();
+
+    try (Statement stmt = connection.createStatement()) {
+      // Seed row in its own transaction.
+      stmt.execute("INSERT INTO txn_ddl_t VALUES (1, 1)");
+    }
+
+    // Drain seed txn: BEGIN + RELATION + INSERT + COMMIT (RELATION may appear with begin).
+    List<PgOutputMessage> seedMessages = new ArrayList<>();
+    int seedCommits = 0;
+    while (seedCommits < 1) {
+      PgOutputMessage msg = receiveMessage(stream, 1).get(0);
+      seedMessages.add(msg);
+      if (msg instanceof PgOutputCommitMessage) {
+        seedCommits++;
+      }
+    }
+    LOG.info("Drained {} messages for seed insert", seedMessages.size());
+
+    try (Statement stmt = connection.createStatement()) {
+      stmt.execute("BEGIN");
+      stmt.execute("INSERT INTO txn_ddl_t VALUES (2, 2)");
+      stmt.execute("ALTER TABLE txn_ddl_t ADD COLUMN c int");
+      stmt.execute("INSERT INTO txn_ddl_t VALUES (3, 3, 30)");
+      stmt.execute("ALTER TABLE txn_ddl_t DROP COLUMN b");
+      stmt.execute("INSERT INTO txn_ddl_t(a, c) VALUES (4, 40)");
+      stmt.execute("COMMIT");
+    }
+
+    // Consume until we have one COMMIT for the transactional DDL block.
+    List<PgOutputMessage> txnMessages = new ArrayList<>();
+    int commits = 0;
+    int inserts = 0;
+    int relations = 0;
+    int maxMessages = 200;
+    while (commits < 1 && txnMessages.size() < maxMessages) {
+      PgOutputMessage msg = receiveMessage(stream, 1).get(0);
+      txnMessages.add(msg);
+      if (msg instanceof PgOutputCommitMessage) {
+        commits++;
+      } else if (msg instanceof PgOutputInsertMessage) {
+        inserts++;
+      } else if (msg instanceof PgOutputRelationMessage) {
+        relations++;
+      }
+    }
+
+    assertEquals("Expected one COMMIT for the transactional DDL block", 1, commits);
+    assertEquals("Expected three INSERTs in the transactional DDL block", 3, inserts);
+    // At least one RELATION for add-column schema and one for drop-column schema.
+    assertTrue("Expected RELATION messages after DDL within the txn, got " + relations,
+        relations >= 2);
+
+    // Verify insert tuple shapes reflect schema changes in order: 2-col, 3-col, 2-col (a,c).
+    List<PgOutputInsertMessage> insertMsgs = new ArrayList<>();
+    for (PgOutputMessage msg : txnMessages) {
+      if (msg instanceof PgOutputInsertMessage) {
+        insertMsgs.add((PgOutputInsertMessage) msg);
+      }
+    }
+    assertEquals(3, insertMsgs.size());
+
+    // First insert (2,2): columns a, b
+    assertEquals(2, insertMsgs.get(0).tuple.columns.size());
+    // Second insert (3,3,30): columns a, b, c after ADD COLUMN
+    assertEquals(3, insertMsgs.get(1).tuple.columns.size());
+    // Third insert (4,40): columns a, c after DROP COLUMN b (2 columns remain)
+    assertEquals(2, insertMsgs.get(2).tuple.columns.size());
+
+    // RELATION should appear before the post-DDL inserts that need the new schema.
+    boolean seenRelationBeforeThreeColInsert = false;
+    boolean seenThreeColInsert = false;
+    boolean seenRelationBeforeFinalInsert = false;
+    int insertIdx = 0;
+    for (PgOutputMessage msg : txnMessages) {
+      if (msg instanceof PgOutputRelationMessage) {
+        if (!seenThreeColInsert) {
+          seenRelationBeforeThreeColInsert = true;
+        } else if (insertIdx < 3) {
+          seenRelationBeforeFinalInsert = true;
+        }
+      } else if (msg instanceof PgOutputInsertMessage) {
+        if (insertIdx == 1) {
+          assertTrue("Expected RELATION before 3-column INSERT after ADD COLUMN",
+              seenRelationBeforeThreeColInsert);
+          seenThreeColInsert = true;
+        } else if (insertIdx == 2) {
+          assertTrue("Expected RELATION before 2-column INSERT after DROP COLUMN",
+              seenRelationBeforeFinalInsert);
+        }
+        insertIdx++;
+      }
+    }
+
+    stream.close();
+  }
 }

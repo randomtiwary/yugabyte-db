@@ -25,6 +25,8 @@
 
 #include "yb/client/table_info.h"
 
+#include "yb/yql/pggate/util/ybc_guc.h"
+
 #include "yb/common/pg_types.h"
 #include "yb/common/read_hybrid_time.h"
 #include "yb/common/row_mark.h"
@@ -1034,6 +1036,32 @@ void PgSession::TrySetCatalogReadPoint(const ReadHybridTime& read_ht) {
   if (read_ht) {
     catalog_read_time_ = read_ht;
   }
+}
+
+void PgSession::SetCatalogInTxnLimit(HybridTime in_txn_limit_ht) {
+  if (!in_txn_limit_ht.is_valid()) {
+    return;
+  }
+  if (catalog_read_time_) {
+    catalog_read_time_.in_txn_limit = in_txn_limit_ht;
+    return;
+  }
+  // No catalog read point yet: seed from yb_read_time (if set) so catalog ops use a consistent
+  // snapshot read with the given in_txn_limit for same-transaction catalog visibility.
+  if (yb_read_time != 0) {
+    if (yb_is_read_time_ht) {
+      catalog_read_time_ = ReadHybridTime::FromUint64(yb_read_time);
+    } else {
+      catalog_read_time_ = ReadHybridTime::FromMicros(yb_read_time);
+    }
+    catalog_read_time_.in_txn_limit = in_txn_limit_ht;
+  } else {
+    // Fall back to a single-time read at in_txn_limit (in_txn_limit itself is kMax in SingleTime;
+    // overwrite with the requested limit for intent visibility within the txn).
+    catalog_read_time_ = ReadHybridTime::SingleTime(in_txn_limit_ht);
+    catalog_read_time_.in_txn_limit = in_txn_limit_ht;
+  }
+  VLOG(2) << "SetCatalogInTxnLimit: catalog_read_time_=" << catalog_read_time_;
 }
 
 Status PgSession::SetupPerformOptionsForDdl(tserver::PgPerformOptionsPB* options) {

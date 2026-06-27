@@ -1654,6 +1654,9 @@ extern void YBCUpdateYbReadTimeAndInvalidateRelcache(uint64_t read_time);
 
 extern void YBCResetYbReadTimeAndInvalidateRelcache();
 
+/* Logical replication: invalidate relcache and set catalog in_txn_limit for DDL records. */
+extern void YBCSetCatalogInTxnLimitAndInvalidateRelcache(uint64_t in_txn_limit_ht);
+
 extern uint64_t YbCalculateTimeDifferenceInMicros(TimestampTz yb_start_time);
 
 static inline bool

@@ -2334,6 +2334,10 @@ void PgApiImpl::ResetCatalogReadTime() {
   pg_session_->ResetCatalogReadPoint();
 }
 
+void PgApiImpl::SetCatalogInTxnLimit(uint64_t in_txn_limit_ht) {
+  pg_session_->SetCatalogInTxnLimit(HybridTime(in_txn_limit_ht));
+}
+
 ReadHybridTime PgApiImpl::GetCatalogReadTime() const {
   return pg_session_->catalog_read_time();
 }

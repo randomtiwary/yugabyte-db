@@ -8605,6 +8605,21 @@ YBCResetYbReadTimeAndInvalidateRelcache()
 	YbRelationCacheInvalidate();
 }
 
+void
+YBCSetCatalogInTxnLimitAndInvalidateRelcache(uint64_t in_txn_limit_ht)
+{
+	/*
+	 * Used by logical replication decoding when a DDL record is streamed
+	 * interleaved with DMLs (transactional DDL). We must not advance
+	 * yb_read_time to the DML/DDL commit_time (that assumes DDL ran in a
+	 * separate transaction). Instead invalidate local caches and raise the
+	 * catalog session in_txn_limit so subsequent catalog reads can observe
+	 * same-transaction catalog writes up to this hybrid time.
+	 */
+	YBCPgSetCatalogInTxnLimit(in_txn_limit_ht);
+	YbRelationCacheInvalidate();
+}
+
 uint64_t
 YbCalculateTimeDifferenceInMicros(TimestampTz yb_start_time)
 {
