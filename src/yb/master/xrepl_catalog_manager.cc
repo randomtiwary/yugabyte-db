@@ -1529,45 +1529,32 @@ Status CatalogManager::PopulateCDCStateTable(const xrepl::StreamId& stream_id,
                                              uint64_t consistent_snapshot_time,
                                              uint64_t stream_creation_time,
                                              bool has_replication_slot_name) {
-  // Validate that the AlterTable callback has populated the checkpoint i.e. it is no longer
-  // OpId::Invalid().
-  std::unordered_set<TabletId> seen_tablet_ids;
-  if (has_consistent_snapshot_option) {
-    std::vector<cdc::CDCStateTableKey> cdc_state_entries;
-    Status iteration_status;
-    auto all_entry_keys = VERIFY_RESULT(cdc_state_table_->GetTableRange(
-        cdc::CDCStateTableEntrySelector().IncludeCheckpoint(), &iteration_status));
-    for (const auto& entry_result : all_entry_keys) {
-      RETURN_NOT_OK(entry_result);
-      const auto& entry = *entry_result;
-
-      if (stream_id == entry.key.stream_id) {
-        seen_tablet_ids.insert(entry.key.tablet_id);
-        SCHECK(
-           *entry.checkpoint != OpId().Invalid(), IllegalState,
-            Format(
-                "Checkpoint for tablet id $0 unexpectedly found Invalid for stream id $1",
-                entry.key.tablet_id, stream_id));
-      }
-    }
-    RETURN_NOT_OK(iteration_status);
-  }
-
   std::vector<cdc::CDCStateTableEntry> entries;
   for (const auto& table_id : table_ids) {
     auto table = VERIFY_RESULT(FindTableById(table_id));
     for (const auto& tablet : VERIFY_RESULT(table->GetTablets())) {
       cdc::CDCStateTableEntry entry(tablet->id(), stream_id);
       if (has_consistent_snapshot_option) {
-        // We must have seen this tablet id in the above check for Invalid checkpoint. If not, this
-        // means that the list of tablets is different from what it was at the start of the stream
-        // creation which indicates a tablet split. In that case, fail the creation and let the
-        // client retry the creation again.
-        if (!seen_tablet_ids.contains(tablet->id())) {
+        // Point-lookup each expected tablet entry instead of a full cdc_state table scan.
+        // Validate that the AlterTable callback has populated the checkpoint i.e. it is no
+        // longer OpId::Invalid(). Missing entries typically indicate a tablet split during
+        // stream creation (AlterSchema RPCs were not sent for the new children); fail so the
+        // client can retry with the correct set of tablets.
+        auto existing_entry = VERIFY_RESULT(cdc_state_table_->TryFetchEntry(
+            {tablet->id(), stream_id},
+            cdc::CDCStateTableEntrySelector().IncludeCheckpoint()));
+        if (!existing_entry.has_value()) {
           return STATUS_FORMAT(
               IllegalState, "CDC State Table entry unexpectedly not found for tablet id $0",
               tablet->id());
         }
+        SCHECK(
+            existing_entry->checkpoint.has_value() &&
+                *existing_entry->checkpoint != OpId().Invalid(),
+            IllegalState,
+            Format(
+                "Checkpoint for tablet id $0 unexpectedly found Invalid for stream id $1",
+                tablet->id(), stream_id));
 
         // For USE_SNAPSHOT option, leave entry in POST_SNAPSHOT_BOOTSTRAP state
         // For NOEXPORT_SNAPSHOT option, leave entry in SNAPSHOT_DONE state
@@ -1866,7 +1853,9 @@ Status CatalogManager::WaitForSnapshotSafeOpIdToBePopulated(
     const xrepl::StreamId& stream_id, const std::vector<TableId>& table_ids,
     CoarseTimePoint deadline) {
 
-  auto num_expected_tablets = 0;
+  // Collect the set of tablet ids we expect to have cdc_state entries for. Point-lookups on these
+  // keys replace a full cdc_state table scan on every poll iteration.
+  std::vector<TabletId> expected_tablet_ids;
   auto sys_catalog_tablet_seen = false;
   for (const auto& table_id : table_ids) {
     auto table = VERIFY_RESULT(FindTableById(table_id));
@@ -1874,40 +1863,36 @@ Status CatalogManager::WaitForSnapshotSafeOpIdToBePopulated(
       // We do not add snapshot entries for catalog tables. Since all the catalog tables reside on
       // the same tablet we count them only once.
       if (!sys_catalog_tablet_seen) {
-        num_expected_tablets += table->TabletCount();
+        for (const auto& tablet : VERIFY_RESULT(table->GetTablets())) {
+          expected_tablet_ids.push_back(tablet->id());
+        }
         sys_catalog_tablet_seen = true;
       }
     } else {
-      num_expected_tablets += table->TabletCount();
+      for (const auto& tablet : VERIFY_RESULT(table->GetTablets())) {
+        expected_tablet_ids.push_back(tablet->id());
+      }
     }
   }
 
   return WaitFor(
-      [&stream_id, &num_expected_tablets, this]() -> Result<bool> {
-        VLOG(1) << "Checking snapshot safe opids for stream: " << stream_id;
+      [&stream_id, &expected_tablet_ids, this]() -> Result<bool> {
+        VLOG(1) << "Checking snapshot safe opids for stream: " << stream_id
+                << ", expected_tablets=" << expected_tablet_ids.size();
 
-        std::vector<cdc::CDCStateTableKey> cdc_state_entries;
-        Status iteration_status;
-        auto all_entry_keys = VERIFY_RESULT(cdc_state_table_->GetTableRange(
-            cdc::CDCStateTableEntrySelector().IncludeCheckpoint(), &iteration_status));
-
-        auto num_rows = 0;
-        for (const auto& entry_result : all_entry_keys) {
-          RETURN_NOT_OK(entry_result);
-          const auto& entry = *entry_result;
-
-          if (stream_id == entry.key.stream_id) {
-            num_rows++;
-            if (!entry.checkpoint.has_value() || *entry.checkpoint == OpId().Invalid()) {
-              return false;
-            }
+        for (const auto& tablet_id : expected_tablet_ids) {
+          auto entry = VERIFY_RESULT(cdc_state_table_->TryFetchEntry(
+              {tablet_id, stream_id},
+              cdc::CDCStateTableEntrySelector().IncludeCheckpoint()));
+          // Entry missing or still has an invalid checkpoint (AlterTable callback not done yet).
+          // Colocated snapshot rows are written in the same upsert as the tablet row, so checking
+          // the primary tablet entry is sufficient.
+          if (!entry.has_value() || !entry->checkpoint.has_value() ||
+              *entry->checkpoint == OpId().Invalid()) {
+            return false;
           }
         }
-
-        RETURN_NOT_OK(iteration_status);
-        VLOG(1) << "num_rows=" << num_rows << ", num_expected_tablets=" << num_expected_tablets;
-        // In case of colocated tables, there would be extra rows, check for >=
-        return (num_rows >= num_expected_tablets);
+        return true;
       },
       deadline - CoarseMonoClock::now(),
       Format("Waiting for snapshot safe opids to be populated for stream_id: $0", stream_id),
