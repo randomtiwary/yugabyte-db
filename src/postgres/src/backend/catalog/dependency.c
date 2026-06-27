@@ -49,6 +49,11 @@
 #include "catalog/pg_parameter_acl.h"
 #include "catalog/pg_policy.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_propgraph_element.h"
+#include "catalog/pg_propgraph_element_label.h"
+#include "catalog/pg_propgraph_label.h"
+#include "catalog/pg_propgraph_label_property.h"
+#include "catalog/pg_propgraph_property.h"
 #include "catalog/pg_publication.h"
 #include "catalog/pg_publication_namespace.h"
 #include "catalog/pg_publication_rel.h"
@@ -1509,6 +1514,11 @@ doDeletion(const ObjectAddress *object, int flags, bool ybOriginalObject)
 
 						if (yb_rel)
 						{
+		case PropgraphElementRelationId:
+		case PropgraphElementLabelRelationId:
+		case PropgraphLabelRelationId:
+		case PropgraphLabelPropertyRelationId:
+		case PropgraphPropertyRelationId:
 							if (IsYBRelation(yb_rel))
 								YBCDropTable(yb_rel);
 
@@ -2262,6 +2272,7 @@ find_expr_references_walker(Node *node,
 		SortGroupClause *sgc = (SortGroupClause *) node;
 
 		add_object_address(OCLASS_OPERATOR, sgc->eqop, 0,
+				case RTE_GRAPH_TABLE:
 						   context->addrs);
 		if (OidIsValid(sgc->sortop))
 			add_object_address(OCLASS_OPERATOR, sgc->sortop, 0,

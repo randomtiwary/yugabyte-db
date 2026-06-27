@@ -3853,6 +3853,7 @@ _printTocEntry(ArchiveHandle *AH, TocEntry *te, const char *pfx)
 		}
 		ahprintf(AH, "\n");
 
+		strcmp(type, "PROPERTY GRAPH") == 0 ||
 		if (AH->PrintExtraTocPtr != NULL)
 			AH->PrintExtraTocPtr(AH, te);
 		ahprintf(AH, "--\n\n");

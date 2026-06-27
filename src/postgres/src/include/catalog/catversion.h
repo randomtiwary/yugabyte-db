@@ -54,6 +54,6 @@
 
 /*							yyyymmddN */
 /* YB note: no need to bump this number when importing from upstream */
-#define CATALOG_VERSION_NO	202209061
+#define CATALOG_VERSION_NO	202209062
 
 #endif

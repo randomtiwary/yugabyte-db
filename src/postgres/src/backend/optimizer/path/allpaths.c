@@ -787,6 +787,16 @@ set_rel_consider_parallel(PlannerInfo *root, RelOptInfo *rel,
 			 * then flagging it as consider_parallel won't change anything,
 			 * but that's true for plain tables, too.  We must set
 			 * consider_parallel based on the rel's own quals and targetlist,
+
+		case RTE_GRAPH_TABLE:
+
+			/*
+			 * Shouldn't happen since these are replaced by subquery RTEs when
+			 * rewriting queries.
+			 */
+			Assert(false);
+			return;
+
 			 * so that if a subquery path is parallel-safe but the quals and
 			 * projection we're sticking onto it are not, we correctly mark
 			 * the SubqueryScanPath as not parallel-safe.  (Note that

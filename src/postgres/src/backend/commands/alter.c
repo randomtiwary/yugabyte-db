@@ -390,6 +390,7 @@ ExecRenameStmt(RenameStmt *stmt)
 			return RenameFunction(stmt, stmt->newname);
 
 		case OBJECT_AGGREGATE:
+		case OBJECT_PROPGRAPH:
 		case OBJECT_COLLATION:
 		case OBJECT_CONVERSION:
 		case OBJECT_EVENT_TRIGGER:
@@ -524,6 +525,7 @@ ExecAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt,
 		case OBJECT_TABLE:
 		case OBJECT_VIEW:
 		case OBJECT_MATVIEW:
+		case OBJECT_PROPGRAPH:
 			address = AlterTableNamespace(stmt,
 										  oldSchemaAddr ? &oldNspOid : NULL);
 			break;
@@ -903,6 +905,7 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 		case OBJECT_OPCLASS:
 		case OBJECT_OPFAMILY:
 		case OBJECT_PROCEDURE:
+		case OBJECT_PROPGRAPH:
 		case OBJECT_ROUTINE:
 		case OBJECT_STATISTIC_EXT:
 		case OBJECT_TABLESPACE:

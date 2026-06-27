@@ -490,7 +490,8 @@ flagInhAttrs(DumpOptions *dopt, TableInfo *tblinfo, int numTables)
 		/* Some kinds never have parents */
 		if (tbinfo->relkind == RELKIND_SEQUENCE ||
 			tbinfo->relkind == RELKIND_VIEW ||
-			tbinfo->relkind == RELKIND_MATVIEW)
+			tbinfo->relkind == RELKIND_MATVIEW ||
+			tbinfo->relkind == RELKIND_PROPGRAPH)
 			continue;
 
 		/* Don't bother computing anything for non-target tables, either */

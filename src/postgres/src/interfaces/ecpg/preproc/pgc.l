@@ -335,6 +335,8 @@ less_equals		"<="
 greater_equals	">="
 less_greater	"<>"
 not_equals		"!="
+/* Note there is no need for left_arrow, since "<-" is not a single operator. */
+right_arrow		"->"
 
 /*
  * "self" is the set of chars that should be returned as single-character
@@ -346,7 +348,7 @@ not_equals		"!="
  * If you change either set, adjust the character lists appearing in the
  * rule for "operator"!
  */
-self			[,()\[\].;\:\+\-\*\/\%\^\<\>\=]
+self			[,()\[\].;\:\|\+\-\*\/\%\^\<\>\=]
 op_chars		[\~\!\@\#\^\&\|\`\?\+\-\*\/\%\<\>\=]
 operator		{op_chars}+
 
@@ -852,6 +854,10 @@ cppline			{space}*#([^i][A-Za-z]*|{if}|{ifdef}|{ifndef}|{import})((\/\*[^*/]*\*+
 					/*
 					 * For SQL compatibility, '+' and '-' cannot be the
 					 * last char of a multi-char operator unless the operator
+{right_arrow}	{
+					return RIGHT_ARROW;
+				}
+
 					 * contains chars that are not in SQL operators.
 					 * The idea is to lex '=-' as two operators, but not
 					 * to forbid operator names like '?-' that could not be
@@ -897,7 +903,7 @@ cppline			{space}*#([^i][A-Za-z]*|{if}|{ifdef}|{ifndef}|{import})((\/\*[^*/]*\*+
 						 * that the "self" rule would have.
 						 */
 						if (nchars == 1 &&
-							strchr(",()[].;:+-*/%^<>=", yytext[0]))
+							strchr(",()[].;:|+-*/%^<>=", yytext[0]))
 							return yytext[0];
 						/*
 						 * Likewise, if what we have left is two chars, and
@@ -917,6 +923,8 @@ cppline			{space}*#([^i][A-Za-z]*|{if}|{ifdef}|{ifndef}|{import})((\/\*[^*/]*\*+
 								return NOT_EQUALS;
 							if (yytext[0] == '!' && yytext[1] == '=')
 								return NOT_EQUALS;
+							if (yytext[0] == '-' && yytext[1] == '>')
+								return RIGHT_ARROW;
 						}
 					}
 

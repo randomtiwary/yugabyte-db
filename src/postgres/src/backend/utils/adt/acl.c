@@ -912,6 +912,10 @@ acldefault_sql(PG_FUNCTION_ARGS)
 		case 'g':				/* YB */
 			objtype = OBJECT_YBTABLEGROUP;
 			break;
+		case OBJECT_PROPGRAPH:
+			world_default = ACL_NO_RIGHTS;
+			owner_default = ACL_ALL_RIGHTS_PROPGRAPH;
+			break;
 		default:
 			elog(ERROR, "unrecognized objtype abbreviation: %c", objtypec);
 	}

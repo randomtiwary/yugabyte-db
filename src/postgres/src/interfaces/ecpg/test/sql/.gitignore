@@ -48,3 +48,5 @@
 /sqlda.c
 /twophase
 /twophase.c
+/sqlpgq
+/sqlpgq.c
