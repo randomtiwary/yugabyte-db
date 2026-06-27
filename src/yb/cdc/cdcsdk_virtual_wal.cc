@@ -673,8 +673,9 @@ Status CDCSDKVirtualWAL::GetConsistentChangesInternal(
       }
 
       // Convert DMLs on pg_class / pg_attribute into DDL records for tables in the publication.
-      // These catalog DMLs are ordered correctly in the priority queue relative to user-table
-      // DMLs, so the resulting DDL records preserve transactional DDL ordering.
+      // Catalog DMLs are enqueued with VWALRecordType::DML (see AddRecordToVirtualWalPriorityQueue),
+      // so they merge with user-table DMLs by record_time/write_id at the same commit_time. Emitting
+      // the synthesized DDL at pop time preserves that transactional DDL ordering in the response.
       if (IsCatalogDmlForDDL(record)) {
         auto relation_oid = VERIFY_RESULT(GetRelationOidFromCatalogDml(record));
         auto user_table_id = GetPgsqlTableId(pg_database_oid_, relation_oid);
@@ -1164,8 +1165,13 @@ Status CDCSDKVirtualWAL::AddRecordToVirtualWalPriorityQueue(
           InternalError, Format("Tablet queue is empty for tablet_id: $0", tablet_id));
     }
     auto record = tablet_queue->front();
-    bool is_publication_refresh_record =
-        (tablet_id == kPublicationRefreshTabletID || tablet_id == master::kSysCatalogTabletId);
+    // Only the synthetic publication-refresh tablet uses PUBLICATION_REFRESH priority. Records
+    // from the real sys catalog tablet (pg_class, pg_attribute, pg_publication_rel, ...) must be
+    // classified by their RowMessage op (BEGIN/DML/COMMIT/DDL) so catalog DMLs merge with user
+    // DMLs via record_time/write_id for transactional DDL ordering. Treating all sys catalog
+    // tablet rows as PUBLICATION_REFRESH would zero out those tie-breakers and ship them after
+    // user DMLs at the same commit_time.
+    bool is_publication_refresh_record = (tablet_id == kPublicationRefreshTabletID);
     bool result =
         CDCSDKUniqueRecordID::CanFormUniqueRecordId(is_publication_refresh_record, record);
     if (result) {

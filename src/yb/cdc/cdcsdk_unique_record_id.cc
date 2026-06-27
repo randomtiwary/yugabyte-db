@@ -83,6 +83,10 @@ RowMessage_Op CDCSDKUniqueRecordID::GetOp() const { return op_; }
 
 VWALRecordType CDCSDKUniqueRecordID::GetVWALRecordTypeFromOp(
     const bool& is_publication_refresh, const RowMessage_Op& op) {
+  // is_publication_refresh is set only for records from the synthetic publication-refresh tablet
+  // queue (timer-driven pub list refresh), not for real sys catalog tablet GetChanges rows.
+  // Catalog DMLs (pg_class / pg_attribute / ...) must use DML (or BEGIN/COMMIT) priority so they
+  // interleave correctly with user-table changes for transactional DDL.
   if (is_publication_refresh) {
     return VWALRecordType::PUBLICATION_REFRESH;
   }

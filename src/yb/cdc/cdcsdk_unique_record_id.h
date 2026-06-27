@@ -34,6 +34,9 @@ class CDCSDKUniqueRecordID {
     BEGIN = 1,
     DML = 2,
     COMMIT = 3,
+    // Only synthetic publication-refresh tablet records use this type. Real sys catalog tablet
+    // rows (including pg_class / pg_attribute DMLs) are classified by RowMessage op so they can
+    // merge with user DMLs for transactional DDL ordering.
     PUBLICATION_REFRESH = 4,
     SAFEPOINT = 5,
     UNKNOWN = 6 // should never be encountered

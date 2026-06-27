@@ -1461,7 +1461,9 @@ TEST_F(CDCSDKConsumptionConsistentChangesTest, TestVWALConsumptionWitDDLStatemen
 
 // Step-1 of transactional DDL support for logical replication: virtual WAL converts pg_class /
 // pg_attribute DMLs into DDL records so ALTER TABLE inside a transaction block is ordered
-// correctly relative to interleaved user DMLs in GetConsistentChanges responses.
+// correctly relative to interleaved user DMLs in GetConsistentChanges responses. Sys catalog
+// tablet rows are classified by op (DML/BEGIN/COMMIT) in the priority queue — not as
+// PUBLICATION_REFRESH — so catalog DMLs merge with user DMLs via record_time/write_id.
 TEST_F(CDCSDKConsumptionConsistentChangesTest, TestVWALTransactionalDDLAlterTableInTxnBlock) {
   // Enable catalog streaming (pg_class + pg_attribute) and transactional DDL.
   ANNOTATE_UNPROTECTED_WRITE(FLAGS_ysql_yb_enable_implicit_dynamic_tables_logical_replication) =
