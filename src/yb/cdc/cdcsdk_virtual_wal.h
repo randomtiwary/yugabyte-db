@@ -219,6 +219,19 @@ class CDCSDKVirtualWAL {
 
   bool IsCatalogTableEligibleForCDC(const TableId& table_id) const;
 
+  // Returns true if the record is a DML on pg_class or pg_attribute that should be converted into a
+  // DDL record for the walsender (transactional DDL support).
+  bool IsCatalogDmlForDDL(const std::shared_ptr<CDCSDKProtoRecordPB>& record) const;
+
+  // Extracts the PG relation OID (table OID) from a pg_class or pg_attribute DML record.
+  Result<uint32_t> GetRelationOidFromCatalogDml(
+      const std::shared_ptr<CDCSDKProtoRecordPB>& record) const;
+
+  // Builds a DDL CDCSDKProtoRecordPB for the given user table using the schema at read_time.
+  // Used when catalog DMLs (pg_class / pg_attribute) are treated as DDL operations.
+  Result<std::shared_ptr<CDCSDKProtoRecordPB>> BuildDDLRecordFromCatalogDml(
+      const std::shared_ptr<CDCSDKProtoRecordPB>& catalog_record, const TableId& user_table_id);
+
   bool ShouldPopulateExplicitCheckpoint();
 
   bool CheckForTableRewriteOrDrop(std::shared_ptr<CDCSDKProtoRecordPB> record);
@@ -360,12 +373,19 @@ class CDCSDKVirtualWAL {
   // The table ID of pg_class catalog table for the database on which virtual WAL is polling.
   TableId pg_class_table_id_;
 
+  // The table ID of pg_attribute catalog table for the database on which virtual WAL is polling.
+  TableId pg_attribute_table_id_;
+
   // The table ID of pg_publication_rel catalog table for the database on which virtual WAL is
   // polling.
   TableId pg_publication_rel_table_id_;
 
   // The table ID of pg_replication_origin catalog.
   TableId pg_replication_origin_table_id_;
+
+  // PG database OID for the namespace on which virtual WAL is polling. Used to construct table IDs
+  // for user tables referenced by pg_class / pg_attribute DMLs when generating DDL records.
+  uint32_t pg_database_oid_ = 0;
 
   // The list of publication OIDs that are being polled by the virtual WAL.
   std::unordered_set<uint32_t> publications_list_;

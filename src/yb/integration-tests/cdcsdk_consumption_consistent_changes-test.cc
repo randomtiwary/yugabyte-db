@@ -16,6 +16,8 @@
 #include "yb/util/flags.h"
 #include "yb/util/test_macros.h"
 
+DECLARE_bool(ysql_yb_ddl_transaction_block_enabled);
+
 namespace yb {
 namespace cdc {
 
@@ -1396,6 +1398,10 @@ TEST_F(CDCSDKConsumptionConsistentChangesTest, TestConsistentSnapshotWithCDCSDKC
 }
 
 TEST_F(CDCSDKConsumptionConsistentChangesTest, TestVWALConsumptionWitDDLStatements) {
+  // Use legacy CHANGE_METADATA_OP-based DDL shipping (one DDL per tablet). Transactional DDL via
+  // catalog DMLs is covered by TestVWALTransactionalDDLAlterTableInTxnBlock.
+  ANNOTATE_UNPROTECTED_WRITE(FLAGS_ysql_yb_enable_implicit_dynamic_tables_logical_replication) =
+      false;
   ANNOTATE_UNPROTECTED_WRITE(FLAGS_cdcsdk_vwal_getchanges_resp_max_size_bytes) = 10_KB;
   ANNOTATE_UNPROTECTED_WRITE(FLAGS_cdc_state_checkpoint_update_interval_ms) = 0;
   ANNOTATE_UNPROTECTED_WRITE(FLAGS_cdc_use_byte_threshold_for_vwal_changes) = false;
@@ -1453,7 +1459,159 @@ TEST_F(CDCSDKConsumptionConsistentChangesTest, TestVWALConsumptionWitDDLStatemen
   CheckRecordCount(get_all_pending_changes_resp, expected_dml_records, expected_ddl_records);
 }
 
+// Step-1 of transactional DDL support for logical replication: virtual WAL converts pg_class /
+// pg_attribute DMLs into DDL records so ALTER TABLE inside a transaction block is ordered
+// correctly relative to interleaved user DMLs in GetConsistentChanges responses.
+TEST_F(CDCSDKConsumptionConsistentChangesTest, TestVWALTransactionalDDLAlterTableInTxnBlock) {
+  // Enable catalog streaming (pg_class + pg_attribute) and transactional DDL.
+  ANNOTATE_UNPROTECTED_WRITE(FLAGS_ysql_yb_enable_implicit_dynamic_tables_logical_replication) =
+      true;
+  ANNOTATE_UNPROTECTED_WRITE(FLAGS_ysql_yb_ddl_transaction_block_enabled) = true;
+  ANNOTATE_UNPROTECTED_WRITE(FLAGS_cdcsdk_vwal_getchanges_resp_max_size_bytes) = 10_KB;
+  ANNOTATE_UNPROTECTED_WRITE(FLAGS_cdc_state_checkpoint_update_interval_ms) = 0;
+  ANNOTATE_UNPROTECTED_WRITE(FLAGS_cdc_use_byte_threshold_for_vwal_changes) = false;
+  ANNOTATE_UNPROTECTED_WRITE(FLAGS_cdcsdk_max_consistent_records) = 500;
+
+  ASSERT_OK(SetUpWithParams(
+      1 /* rf */, 1 /* num_masters */, false /* colocated */,
+      true /* cdc_populate_safepoint_record */));
+
+  auto table = ASSERT_RESULT(CreateTable(
+      &test_cluster_, test_namespace_name, kTableName, 1 /* num_tablets */));
+  google::protobuf::RepeatedPtrField<master::TabletLocationsPB> tablets;
+  ASSERT_OK(test_client()->GetTablets(table, 0, &tablets, nullptr));
+  ASSERT_EQ(tablets.size(), 1);
+
+  auto stream_id = ASSERT_RESULT(CreateConsistentSnapshotStreamWithReplicationSlot());
+  ASSERT_OK(InitVirtualWAL(stream_id, {table.table_id()}));
+
+  auto conn = ASSERT_RESULT(test_cluster_.ConnectToDB(test_namespace_name));
+
+  // Seed row so post-DDL DML can reference existing data if needed.
+  ASSERT_OK(conn.Execute("INSERT INTO test_table VALUES (1, 1)"));
+
+  // Drain the initial insert (BEGIN + INSERT + COMMIT) before the transactional DDL block.
+  auto seed_resp = ASSERT_RESULT(GetAllPendingTxnsFromVirtualWAL(
+      stream_id, {table.table_id()}, 1 /* expected_dml_records */,
+      false /* init_virtual_wal */, kVWALSessionId1, false /* allow_sending_feedback */));
+  ASSERT_GE(seed_resp.records.size(), 3);
+
+  // Transaction block with interleaved user DML and DDL (add column, then drop column).
+  ASSERT_OK(conn.Execute("BEGIN"));
+  ASSERT_OK(conn.Execute("INSERT INTO test_table VALUES (2, 2)"));
+  ASSERT_OK(conn.Execute("ALTER TABLE test_table ADD COLUMN value_2 int"));
+  ASSERT_OK(conn.Execute("INSERT INTO test_table VALUES (3, 3, 30)"));
+  ASSERT_OK(conn.Execute("ALTER TABLE test_table DROP COLUMN value_1"));
+  ASSERT_OK(conn.Execute("INSERT INTO test_table(key, value_2) VALUES (4, 40)"));
+  ASSERT_OK(conn.Execute("COMMIT"));
+
+  // Poll GetConsistentChanges until we have seen COMMIT for the transactional DDL block and
+  // collected DDL records generated from catalog DMLs.
+  std::vector<CDCSDKProtoRecordPB> all_records;
+  bool saw_commit = false;
+  int ddl_count = 0;
+  int insert_count = 0;
+  ASSERT_OK(WaitFor(
+      [&]() -> Result<bool> {
+        auto change_resp = VERIFY_RESULT(GetConsistentChangesFromCDC(stream_id));
+        for (const auto& record : change_resp.cdc_sdk_proto_records()) {
+          all_records.push_back(record);
+          if (record.row_message().op() == RowMessage_Op_DDL) {
+            ddl_count++;
+          } else if (record.row_message().op() == RowMessage_Op_INSERT) {
+            insert_count++;
+          } else if (record.row_message().op() == RowMessage_Op_COMMIT) {
+            saw_commit = true;
+          }
+        }
+        // Expect at least one DDL from add-column and one from drop-column catalog DMLs, plus the
+        // three inserts from the transaction block.
+        return saw_commit && ddl_count >= 2 && insert_count >= 3;
+      },
+      MonoDelta::FromSeconds(120),
+      "Timed out waiting for transactional DDL records in GetConsistentChanges"));
+
+  ASSERT_TRUE(saw_commit);
+  ASSERT_GE(ddl_count, 2) << "Expected DDL records from pg_class/pg_attribute DMLs for ADD and "
+                             "DROP COLUMN";
+  ASSERT_GE(insert_count, 3);
+
+  // Verify ordering: within the transaction, DDL records and INSERTs are interleaved in an order
+  // consistent with the statement order (catalog changes for ADD COLUMN appear before the insert
+  // that uses the new column; catalog changes for DROP COLUMN appear before the insert that no
+  // longer has value_1). We assert that we see at least one DDL before the insert with 3 columns
+  // (key, value_1, value_2) and at least one DDL before the final insert with 2 columns.
+  bool seen_begin = false;
+  bool seen_ddl_before_three_col_insert = false;
+  bool seen_three_col_insert = false;
+  bool seen_ddl_before_two_col_insert_after_drop = false;
+  bool seen_two_col_insert_after_drop = false;
+  int ddl_seen_so_far = 0;
+
+  for (const auto& record : all_records) {
+    const auto op = record.row_message().op();
+    if (op == RowMessage_Op_BEGIN) {
+      seen_begin = true;
+      continue;
+    }
+    if (!seen_begin) {
+      continue;
+    }
+    if (op == RowMessage_Op_DDL) {
+      ddl_seen_so_far++;
+      if (!seen_three_col_insert) {
+        seen_ddl_before_three_col_insert = true;
+      } else if (!seen_two_col_insert_after_drop) {
+        seen_ddl_before_two_col_insert_after_drop = true;
+      }
+      // DDL records generated from catalog DMLs should target the publication user table.
+      ASSERT_EQ(record.row_message().table_id(), table.table_id());
+      ASSERT_TRUE(record.row_message().has_schema());
+      continue;
+    }
+    if (op == RowMessage_Op_INSERT) {
+      const int num_cols = record.row_message().new_tuple_size();
+      if (num_cols >= 3 && !seen_three_col_insert) {
+        // INSERT (3, 3, 30) after ADD COLUMN — must be preceded by at least one DDL.
+        ASSERT_TRUE(seen_ddl_before_three_col_insert)
+            << "Expected at least one DDL record before the 3-column INSERT after ADD COLUMN";
+        seen_three_col_insert = true;
+      } else if (num_cols == 2 && seen_three_col_insert && !seen_two_col_insert_after_drop) {
+        // INSERT (4, 40) after DROP COLUMN — must be preceded by another DDL for the drop.
+        ASSERT_TRUE(seen_ddl_before_two_col_insert_after_drop)
+            << "Expected at least one DDL record before the 2-column INSERT after DROP COLUMN";
+        seen_two_col_insert_after_drop = true;
+      }
+    }
+    if (op == RowMessage_Op_COMMIT) {
+      break;
+    }
+  }
+
+  ASSERT_TRUE(seen_begin);
+  ASSERT_GE(ddl_seen_so_far, 2);
+  ASSERT_TRUE(seen_three_col_insert);
+  ASSERT_TRUE(seen_two_col_insert_after_drop);
+
+  // No DDL records from GetChanges (CHANGE_METADATA_OP) should have been shipped; all DDLs are
+  // synthesized from catalog DMLs and therefore carry the user table_id (asserted above) and a
+  // commit_time.
+  for (const auto& record : all_records) {
+    if (record.row_message().op() == RowMessage_Op_DDL) {
+      ASSERT_TRUE(record.row_message().has_commit_time());
+      ASSERT_FALSE(record.row_message().table_id().empty());
+    }
+  }
+
+  LOG(INFO) << "Transactional DDL test observed " << ddl_count << " DDL records and "
+            << insert_count << " INSERT records in order across " << all_records.size()
+            << " total records";
+}
+
 TEST_F(CDCSDKConsumptionConsistentChangesTest, TestVWALConsumptionWitDDLStatementsAndRestart) {
+  // Use legacy CHANGE_METADATA_OP-based DDL shipping (one DDL per tablet).
+  ANNOTATE_UNPROTECTED_WRITE(FLAGS_ysql_yb_enable_implicit_dynamic_tables_logical_replication) =
+      false;
   ANNOTATE_UNPROTECTED_WRITE(FLAGS_cdcsdk_vwal_getchanges_resp_max_size_bytes) = 10_KB;
   ANNOTATE_UNPROTECTED_WRITE(FLAGS_cdc_state_checkpoint_update_interval_ms) = 0;
   ANNOTATE_UNPROTECTED_WRITE(FLAGS_cdc_use_byte_threshold_for_vwal_changes) = false;
@@ -1541,6 +1699,9 @@ TEST_F(CDCSDKConsumptionConsistentChangesTest, TestVWALConsumptionWitDDLStatemen
 }
 
 TEST_F(CDCSDKConsumptionConsistentChangesTest, TestVWALConsumptionWithMultipleAlter) {
+  // Use legacy CHANGE_METADATA_OP-based DDL shipping (one DDL per tablet).
+  ANNOTATE_UNPROTECTED_WRITE(FLAGS_ysql_yb_enable_implicit_dynamic_tables_logical_replication) =
+      false;
   ANNOTATE_UNPROTECTED_WRITE(FLAGS_cdcsdk_vwal_getchanges_resp_max_size_bytes) = 10_KB;
   ANNOTATE_UNPROTECTED_WRITE(FLAGS_cdc_state_checkpoint_update_interval_ms) = 0;
   ANNOTATE_UNPROTECTED_WRITE(FLAGS_cdc_use_byte_threshold_for_vwal_changes) = false;

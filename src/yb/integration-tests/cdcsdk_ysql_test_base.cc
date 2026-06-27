@@ -2602,6 +2602,7 @@ void CDCSDKYsqlTest::VerifyTablesInStreamMetadata(
             const auto pg_database_oid = VERIFY_RESULT(conn.FetchRow<pgwrapper::PGOid>(
                 Format("SELECT oid FROM pg_database WHERE datname = '$0'", test_namespace_name)));
             all_expected_table_ids.insert(GetPgsqlTableId(pg_database_oid, kPgClassTableOid));
+            all_expected_table_ids.insert(GetPgsqlTableId(pg_database_oid, kPgAttributeTableOid));
             all_expected_table_ids.insert(GetPgsqlTableId(pg_database_oid, kPgPublicationRelOid));
             all_expected_table_ids.insert(GetPgsqlTableId(kTemplate1Oid, kPgReplicationOriginOid));
           }
@@ -2660,6 +2661,7 @@ void CDCSDKYsqlTest::VerifyTablesAndStateInStreamMetadata(
           const auto pg_database_oid = VERIFY_RESULT(conn.FetchRow<pgwrapper::PGOid>(
               Format("SELECT oid FROM pg_database WHERE datname = '$0'", test_namespace_name)));
           all_expected_table_ids.insert(GetPgsqlTableId(pg_database_oid, kPgClassTableOid));
+          all_expected_table_ids.insert(GetPgsqlTableId(pg_database_oid, kPgAttributeTableOid));
           all_expected_table_ids.insert(GetPgsqlTableId(pg_database_oid, kPgPublicationRelOid));
           all_expected_table_ids.insert(GetPgsqlTableId(kTemplate1Oid, kPgReplicationOriginOid));
         }

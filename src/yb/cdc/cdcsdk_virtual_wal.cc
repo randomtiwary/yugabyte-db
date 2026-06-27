@@ -15,7 +15,10 @@
 #include "yb/cdc/xrepl_stream_metadata.h"
 
 #include "yb/client/client.h"
+#include "yb/client/table.h"
 #include "yb/common/entity_ids.h"
+#include "yb/common/schema.h"
+#include "yb/common/schema_pbutil.h"
 
 #include "yb/master/sys_catalog_constants.h"
 
@@ -50,11 +53,22 @@
 #define GET_OID_FROM_PG_CLASS_RECORD(record) \
   record->row_message().new_tuple().Get(0).pg_catalog_value().uint32_value()
 
+// For DELETE records on catalog tables, values are present in old_tuple.
+#define GET_OID_FROM_PG_CLASS_RECORD_OLD(record) \
+  record->row_message().old_tuple().Get(0).pg_catalog_value().uint32_value()
+
 #define GET_RELFILENODE_FROM_PG_CLASS_RECORD(record) \
   record->row_message().new_tuple().Get(7).pg_catalog_value().uint32_value()
 
 #define GET_RELKIND_FROM_PG_CLASS_RECORD(record) \
   record->row_message().new_tuple().Get(16).pg_catalog_value().int8_value()
+
+// attrelid is the first column of pg_attribute.
+#define GET_ATTRELID_FROM_PG_ATTRIBUTE_RECORD(record) \
+  record->row_message().new_tuple().Get(0).pg_catalog_value().uint32_value()
+
+#define GET_ATTRELID_FROM_PG_ATTRIBUTE_RECORD_OLD(record) \
+  record->row_message().old_tuple().Get(0).pg_catalog_value().uint32_value()
 
 #define GET_PUBOID_FROM_PG_PUBLICATION_REL_RECORD(record) \
   record->row_message().new_tuple().Get(1).pg_catalog_value().uint32_value()
@@ -241,15 +255,17 @@ Status CDCSDKVirtualWAL::InitVirtualWALInternal(
 
     // Add the PG catalog tables to the table_list.
     auto namespace_id = stream->GetNamespaceId();
-    auto pg_database_oid = VERIFY_RESULT(GetPgsqlDatabaseOid(namespace_id));
-    pg_class_table_id_ = GetPgsqlTableId(pg_database_oid, kPgClassTableOid);
-    pg_publication_rel_table_id_ = GetPgsqlTableId(pg_database_oid, kPgPublicationRelOid);
+    pg_database_oid_ = VERIFY_RESULT(GetPgsqlDatabaseOid(namespace_id));
+    pg_class_table_id_ = GetPgsqlTableId(pg_database_oid_, kPgClassTableOid);
+    pg_attribute_table_id_ = GetPgsqlTableId(pg_database_oid_, kPgAttributeTableOid);
+    pg_publication_rel_table_id_ = GetPgsqlTableId(pg_database_oid_, kPgPublicationRelOid);
     pg_replication_origin_table_id_ = GetPgsqlTableId(kTemplate1Oid, kPgReplicationOriginOid);
     table_list.emplace(pg_class_table_id_);
+    table_list.emplace(pg_attribute_table_id_);
     table_list.emplace(pg_publication_rel_table_id_);
     table_list.emplace(pg_replication_origin_table_id_);
-    VLOG_WITH_PREFIX(1) << "Successfully added the catalog tables pg_class, pg_publication_rel and "
-                           "pg_replication_origin to the polling list.";
+    VLOG_WITH_PREFIX(1) << "Successfully added the catalog tables pg_class, pg_attribute, "
+                           "pg_publication_rel and pg_replication_origin to the polling list.";
   }
 
   if (FLAGS_enable_table_rewrite_for_cdcsdk_table) {
@@ -632,6 +648,16 @@ Status CDCSDKVirtualWAL::GetConsistentChangesInternal(
     auto record = tablet_record_info_pair.second.second;
 
     if (tablet_id == master::kSysCatalogTabletId) {
+      // Ignore DDL records originating from GetChanges on the sys catalog tablet (e.g. from
+      // CHANGE_METADATA_OP used for retention barriers). DDL records for user tables are generated
+      // below from pg_class / pg_attribute DMLs so that they participate in the same transaction
+      // boundary as interleaved DMLs (transactional DDL).
+      if (record->row_message().op() == RowMessage_Op_DDL) {
+        VLOG_WITH_PREFIX(2) << "Ignoring DDL record from sys catalog tablet GetChanges: "
+                            << record->ShortDebugString();
+        continue;
+      }
+
       auto pub_refresh_required =
           DeterminePubRefreshFromMasterRecord(tablet_record_info_pair.second);
       if (pub_refresh_required) {
@@ -645,6 +671,33 @@ Status CDCSDKVirtualWAL::GetConsistentChangesInternal(
             << last_pub_refresh_time;
         break;
       }
+
+      // Convert DMLs on pg_class / pg_attribute into DDL records for tables in the publication.
+      // These catalog DMLs are ordered correctly in the priority queue relative to user-table
+      // DMLs, so the resulting DDL records preserve transactional DDL ordering.
+      if (IsCatalogDmlForDDL(record)) {
+        auto relation_oid = VERIFY_RESULT(GetRelationOidFromCatalogDml(record));
+        auto user_table_id = GetPgsqlTableId(pg_database_oid_, relation_oid);
+        // Only emit DDL for tables that are part of the publication / polling list.
+        if (!publication_table_list_.contains(user_table_id)) {
+          VLOG_WITH_PREFIX(3) << "Skipping catalog DML for non-publication table oid="
+                              << relation_oid << " table_id=" << user_table_id;
+          continue;
+        }
+
+        auto ddl_record =
+            VERIFY_RESULT(BuildDDLRecordFromCatalogDml(record, user_table_id));
+        auto records = resp->add_cdc_sdk_proto_records();
+        VLOG_WITH_PREFIX(1) << "Shipping DDL record generated from catalog DML: "
+                            << ddl_record->ShortDebugString();
+        last_seen_ddl_commit_time_ = HybridTime(ddl_record->row_message().commit_time());
+        records->CopyFrom(*ddl_record);
+        metadata.ddl_records++;
+        continue;
+      }
+
+      // Other catalog records (BEGIN/COMMIT for catalog-only txns, pg_publication_rel DML that did
+      // not trigger a refresh, etc.) are not shipped to the walsender.
       continue;
     }
 
@@ -654,8 +707,18 @@ Status CDCSDKVirtualWAL::GetConsistentChangesInternal(
       continue;
     }
 
-    // Skip generating LSN & txnID for a DDL record and directly add it to the response.
+    // When catalog tables are being polled (detect_publication_changes_implicitly_), ignore DDL
+    // records coming from GetChanges on user tablets (CHANGE_METADATA_OP). DDLs are derived from
+    // pg_class / pg_attribute DMLs above so that they are ordered correctly within transaction
+    // blocks interleaved with DMLs. For legacy slots without catalog polling, continue to ship
+    // CHANGE_METADATA_OP-based DDL records as before.
     if (record->row_message().op() == RowMessage_Op_DDL) {
+      if (detect_publication_changes_implicitly_) {
+        VLOG_WITH_PREFIX(2) << "Ignoring DDL record from GetChanges (user tablet): "
+                            << record->ShortDebugString();
+        last_seen_ddl_commit_time_ = HybridTime(record->row_message().commit_time());
+        continue;
+      }
       auto records = resp->add_cdc_sdk_proto_records();
       VLOG_WITH_PREFIX(1) << "Shipping DDL record: " << record->ShortDebugString();
       last_seen_ddl_commit_time_ = HybridTime(record->row_message().commit_time());
@@ -1785,8 +1848,132 @@ std::vector<TabletId> CDCSDKVirtualWAL::GetTabletIdsFromVirtualWAL() {
 }
 
 bool CDCSDKVirtualWAL::IsCatalogTableEligibleForCDC(const TableId& table_id) const {
-  return table_id == pg_class_table_id_ || table_id == pg_publication_rel_table_id_ ||
-         table_id == pg_replication_origin_table_id_;
+  return table_id == pg_class_table_id_ || table_id == pg_attribute_table_id_ ||
+         table_id == pg_publication_rel_table_id_ || table_id == pg_replication_origin_table_id_;
+}
+
+bool CDCSDKVirtualWAL::IsCatalogDmlForDDL(
+    const std::shared_ptr<CDCSDKProtoRecordPB>& record) const {
+  const auto& table_id = record->row_message().table_id();
+  if (table_id != pg_class_table_id_ && table_id != pg_attribute_table_id_) {
+    return false;
+  }
+  const auto op = record->row_message().op();
+  return op == RowMessage_Op_INSERT || op == RowMessage_Op_UPDATE || op == RowMessage_Op_DELETE;
+}
+
+Result<uint32_t> CDCSDKVirtualWAL::GetRelationOidFromCatalogDml(
+    const std::shared_ptr<CDCSDKProtoRecordPB>& record) const {
+  const auto& table_id = record->row_message().table_id();
+  const auto op = record->row_message().op();
+  const bool use_old_tuple = (op == RowMessage_Op_DELETE);
+
+  if (table_id == pg_class_table_id_) {
+    if (use_old_tuple) {
+      SCHECK_GT(
+          record->row_message().old_tuple_size(), 0, IllegalState,
+          "pg_class DELETE record missing old_tuple");
+      return GET_OID_FROM_PG_CLASS_RECORD_OLD(record);
+    }
+    SCHECK_GT(
+        record->row_message().new_tuple_size(), 0, IllegalState,
+        "pg_class DML record missing new_tuple");
+    return GET_OID_FROM_PG_CLASS_RECORD(record);
+  }
+
+  if (table_id == pg_attribute_table_id_) {
+    if (use_old_tuple) {
+      SCHECK_GT(
+          record->row_message().old_tuple_size(), 0, IllegalState,
+          "pg_attribute DELETE record missing old_tuple");
+      return GET_ATTRELID_FROM_PG_ATTRIBUTE_RECORD_OLD(record);
+    }
+    SCHECK_GT(
+        record->row_message().new_tuple_size(), 0, IllegalState,
+        "pg_attribute DML record missing new_tuple");
+    return GET_ATTRELID_FROM_PG_ATTRIBUTE_RECORD(record);
+  }
+
+  return STATUS_FORMAT(
+      InvalidArgument, "Record is not a pg_class/pg_attribute DML: table_id=$0", table_id);
+}
+
+Result<std::shared_ptr<CDCSDKProtoRecordPB>> CDCSDKVirtualWAL::BuildDDLRecordFromCatalogDml(
+    const std::shared_ptr<CDCSDKProtoRecordPB>& catalog_record, const TableId& user_table_id) {
+  auto schema_result = cdc_service_->client()->GetTableSchemaFromSysCatalog(
+      user_table_id, catalog_record->row_message().commit_time());
+
+  Schema schema;
+  uint32_t schema_version = 0;
+  std::string table_name;
+  std::string pgschema_name;
+
+  if (schema_result.ok()) {
+    schema = std::move(schema_result->first);
+    schema_version = schema_result->second;
+    pgschema_name = schema.SchemaName();
+  } else {
+    // Fall back to opening the table for the current schema if historical schema lookup fails
+    // (e.g. table was just created and not yet visible at that read time on master).
+    VLOG_WITH_PREFIX(1) << "GetTableSchemaFromSysCatalog failed for table " << user_table_id
+                        << " at commit_time " << catalog_record->row_message().commit_time()
+                        << ": " << schema_result.status() << "; falling back to OpenTable";
+    auto table = VERIFY_RESULT(cdc_service_->client()->OpenTable(user_table_id));
+    schema = table->schema();
+    schema_version = table->schema_version();
+    pgschema_name = schema.SchemaName();
+    table_name = table->name().table_name();
+  }
+
+  if (table_name.empty()) {
+    auto table = cdc_service_->client()->OpenTable(user_table_id);
+    if (table.ok()) {
+      table_name = (*table)->name().table_name();
+      if (pgschema_name.empty()) {
+        pgschema_name = (*table)->schema().SchemaName();
+      }
+    } else {
+      // Best-effort: use table_id as a stand-in so the record is still usable for debugging.
+      table_name = user_table_id;
+    }
+  }
+
+  auto ddl_record = std::make_shared<CDCSDKProtoRecordPB>();
+  auto* row_message = ddl_record->mutable_row_message();
+  row_message->set_op(RowMessage_Op_DDL);
+  row_message->set_table(table_name);
+  row_message->set_table_id(user_table_id);
+  row_message->set_commit_time(catalog_record->row_message().commit_time());
+  row_message->set_schema_version(schema_version);
+  if (!pgschema_name.empty()) {
+    row_message->set_pgschema_name(pgschema_name);
+  }
+
+  // Preserve ordering metadata from the catalog DML so the DDL sits at the same position in the
+  // stream relative to other records from the same transaction.
+  if (catalog_record->has_cdc_sdk_op_id()) {
+    ddl_record->mutable_cdc_sdk_op_id()->CopyFrom(catalog_record->cdc_sdk_op_id());
+  }
+
+  SchemaPB schema_pb;
+  SchemaToPB(schema, &schema_pb);
+  for (const auto& column : schema_pb.columns()) {
+    auto* column_info = row_message->mutable_schema()->add_column_info();
+    column_info->set_name(column.name());
+    column_info->mutable_type()->CopyFrom(column.type());
+    column_info->set_is_key(column.is_key());
+    column_info->set_is_hash_key(column.is_hash_key());
+    column_info->set_is_nullable(column.is_nullable());
+    column_info->set_oid(column.pg_type_oid());
+  }
+
+  auto* table_properties_pb = row_message->mutable_schema()->mutable_tab_info();
+  table_properties_pb->set_default_time_to_live(schema_pb.table_properties().default_time_to_live());
+  table_properties_pb->set_num_tablets(schema_pb.table_properties().num_tablets());
+  table_properties_pb->set_is_ysql_catalog_table(
+      schema_pb.table_properties().is_ysql_catalog_table());
+
+  return ddl_record;
 }
 
 bool CDCSDKVirtualWAL::DeterminePubRefreshFromMasterRecord(const RecordInfo& record_info) {
@@ -1811,6 +1998,9 @@ bool CDCSDKVirtualWAL::DeterminePubRefreshFromMasterRecord(const RecordInfo& rec
     }
 
     return true;
+  } else if (table_id == pg_attribute_table_id_) {
+    // pg_attribute DMLs are used only for generating DDL records, not publication refresh.
+    return false;
   } else if (table_id == pg_publication_rel_table_id_) {
     if (record->row_message().op() != RowMessage_Op_INSERT &&
         record->row_message().op() != RowMessage_Op_DELETE) {
@@ -1836,7 +2026,7 @@ bool CDCSDKVirtualWAL::DeterminePubRefreshFromMasterRecord(const RecordInfo& rec
     return true;
   }
 
-  // We should only receive records corresponding to pg_class, pg_publication_rel and
+  // We should only receive records corresponding to pg_class, pg_attribute, pg_publication_rel and
   // pg_replication_origin tables. Only possibility of reaching here is when a DDL record is sent
   // from sys catalog tablet, for ex: when a new slot is created, the existing slot sees the
   // CHANGE_METADATA_OP used for setting retention barriers and sends a DDL record.
@@ -1844,6 +2034,7 @@ bool CDCSDKVirtualWAL::DeterminePubRefreshFromMasterRecord(const RecordInfo& rec
       << "Records from an unexpected table: " << table_id
       << " received from sys catalog tablet in virtual WAL."
       << " pg_class_table_id_ = " << pg_class_table_id_
+      << " pg_attribute_table_id_ = " << pg_attribute_table_id_
       << " pg_publication_rel_table_id_ = " << pg_publication_rel_table_id_
       << " pg_replication_origin_table_id_ = " << pg_replication_origin_table_id_;
   return false;
