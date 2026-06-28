@@ -273,13 +273,3 @@ endmacro()
 
 yb_add_script(flamegraph.pl)
 yb_add_script(stackcollapse-perf.pl)
-
-#########################################
-# allocator_benchmark (standalone timing tool)
-#########################################
-# Built with whichever allocator the YB tree is linked against (tcmalloc by default,
-# jemalloc when configured with -DYB_JEMALLOC_ENABLED=1 / ./yb_build.sh --use-jemalloc).
-# Prefer scripts/benchmark_allocators.sh to compare multiple allocators without a full build.
-add_executable(allocator_benchmark allocator_benchmark.cc)
-# Inherits tcmalloc/jemalloc from the global add_executable wrapper in YugabyteFunctions.cmake.
-target_link_libraries(allocator_benchmark pthread)
