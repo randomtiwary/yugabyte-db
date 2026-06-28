@@ -217,14 +217,50 @@ macro(yb_find_third_party_dependencies)
     SHARED_LIB "${ABSEIL_SHARED_LIB}")
 
   # ------------------------------------------------------------------------------------------------
+  # Deciding whether to use jemalloc (opt-in; mutually exclusive with tcmalloc)
+  # ------------------------------------------------------------------------------------------------
+
+  if ("${YB_JEMALLOC_ENABLED}" STREQUAL "")
+    set(YB_JEMALLOC_ENABLED "0")
+  else()
+    if (NOT "${YB_JEMALLOC_ENABLED}" MATCHES "^[01]$")
+      message(FATAL_ERROR
+              "YB_JEMALLOC_ENABLED has an invalid value '${YB_JEMALLOC_ENABLED}'. Can be 0, 1, or "
+              "empty (undefined).")
+    endif()
+    message("YB_JEMALLOC_ENABLED is already set to '${YB_JEMALLOC_ENABLED}'")
+  endif()
+
+  if ("${YB_JEMALLOC_ENABLED}" STREQUAL "1")
+    if (IS_SANITIZER)
+      message(FATAL_ERROR "jemalloc cannot be used with ASAN/TSAN (build type ${YB_BUILD_TYPE}).")
+    endif()
+    # jemalloc replaces the default allocator; do not also link tcmalloc.
+    set(YB_TCMALLOC_ENABLED "0")
+    message("Using jemalloc (YB_JEMALLOC_ENABLED=1); tcmalloc is disabled")
+    find_package(JEMalloc REQUIRED)
+    include_directories(SYSTEM ${JEMALLOC_INCLUDE_DIR})
+    if(APPLE)
+      ADD_THIRDPARTY_LIB(jemalloc SHARED_LIB "${JEMALLOC_SHARED_LIB}")
+    else()
+      ADD_THIRDPARTY_LIB(jemalloc STATIC_LIB "${JEMALLOC_STATIC_LIB}")
+    endif()
+    ADD_CXX_FLAGS("-DYB_JEMALLOC_ENABLED")
+  endif()
+
+  # ------------------------------------------------------------------------------------------------
   # Deciding whether to use tcmalloc
   # ------------------------------------------------------------------------------------------------
 
-  # Do not use tcmalloc for ASAN/TSAN.
+  # Do not use tcmalloc for ASAN/TSAN, or when jemalloc is selected.
   if ("${YB_TCMALLOC_ENABLED}" STREQUAL "")
-    if (IS_SANITIZER)
+    if (IS_SANITIZER OR "${YB_JEMALLOC_ENABLED}" STREQUAL "1")
       set(YB_TCMALLOC_ENABLED "0")
-      message("Not using tcmalloc due to build type ${YB_BUILD_TYPE}")
+      if ("${YB_JEMALLOC_ENABLED}" STREQUAL "1")
+        message("Not using tcmalloc because jemalloc is enabled")
+      else()
+        message("Not using tcmalloc due to build type ${YB_BUILD_TYPE}")
+      endif()
     else()
       set(YB_TCMALLOC_ENABLED "1")
       message("Using tcmalloc by default, build type is ${YB_BUILD_TYPE}, "
@@ -238,6 +274,12 @@ macro(yb_find_third_party_dependencies)
     endif()
 
     message("YB_TCMALLOC_ENABLED is already set to '${YB_TCMALLOC_ENABLED}'")
+  endif()
+
+  if ("${YB_TCMALLOC_ENABLED}" STREQUAL "1" AND "${YB_JEMALLOC_ENABLED}" STREQUAL "1")
+    message(FATAL_ERROR "Cannot enable both tcmalloc and jemalloc. "
+            "YB_TCMALLOC_ENABLED=${YB_TCMALLOC_ENABLED}, "
+            "YB_JEMALLOC_ENABLED=${YB_JEMALLOC_ENABLED}")
   endif()
 
   if ("${YB_TCMALLOC_ENABLED}" STREQUAL "1")

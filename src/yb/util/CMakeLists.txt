@@ -225,6 +225,7 @@ set(UTIL_SRCS
   striped64.cc
   subprocess.cc
   sync_point.cc
+  jemalloc_util.cc
   tcmalloc_profile.cc
   tcmalloc_trace.cc
   tcmalloc_util.cc
@@ -343,6 +344,11 @@ if(APPLE AND "${YB_TCMALLOC_ENABLED}" STREQUAL "1")
   # linked here so the tcmalloc API symbols these libraries reference resolve at link time.
   target_link_libraries(yb_util tcmalloc profiler)
   target_link_libraries(yb_test_util tcmalloc profiler)
+endif()
+
+if(APPLE AND "${YB_JEMALLOC_ENABLED}" STREQUAL "1")
+  target_link_libraries(yb_util jemalloc)
+  target_link_libraries(yb_test_util jemalloc)
 endif()
 
 #######################################

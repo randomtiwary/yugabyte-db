@@ -473,6 +473,22 @@ function(add_executable name)
     endif()
     # Link with libm because tcmalloc requires the log2 function.
     target_link_libraries("${name}" m)
+  elseif("${YB_JEMALLOC_ENABLED}" STREQUAL "1")
+    # Link every executable with jemalloc so it replaces the process allocator (opt-in).
+    # Whole-archive is required on Linux so malloc/free symbols are taken from jemalloc.
+    if(APPLE)
+      target_link_libraries(${name} jemalloc)
+    else()
+      target_link_libraries(${name} "${JEMALLOC_STATIC_LIB_LD_FLAGS}")
+    endif()
+    if(IS_CLANG)
+      target_link_libraries("${name}" c++)
+    endif()
+    # jemalloc needs pthread and libm; on Linux also libdl for mallctl extent hooks.
+    target_link_libraries("${name}" pthread m)
+    if(NOT APPLE)
+      target_link_libraries("${name}" dl)
+    endif()
   endif()
 
   yb_process_pch(${name})

@@ -1006,6 +1006,16 @@ if [[ ${no_tcmalloc} == "true" && ${must_use_tcmalloc} == "true" ]]; then
         "some version of tcmalloc (Google tcmalloc or gperftools tcmalloc)"
 fi
 
+if [[ ${use_jemalloc} == "true" && ${must_use_tcmalloc} == "true" ]]; then
+  fatal "--use-jemalloc was specified along with an option that requires tcmalloc"
+fi
+
+if [[ ${use_jemalloc} == "true" ]]; then
+  cmake_opts+=( "-DYB_JEMALLOC_ENABLED=1" "-DYB_TCMALLOC_ENABLED=0" )
+elif [[ -n ${YB_JEMALLOC_ENABLED:-} ]]; then
+  cmake_opts+=( "-DYB_JEMALLOC_ENABLED=$YB_JEMALLOC_ENABLED" )
+fi
+
 if [[ ${no_tcmalloc} == "true" ]]; then
   cmake_opts+=( "-DYB_TCMALLOC_ENABLED=0" )
 elif [[ -n ${YB_TCMALLOC_ENABLED:-} ]]; then
@@ -1015,6 +1025,9 @@ fi
 if [[ ${use_google_tcmalloc} == "true" ]]; then
   if ! is_linux; then
     fatal "Google TCMalloc is only supported on linux. OSTYPE is: '${OSTYPE}'."
+  fi
+  if [[ ${use_jemalloc} == "true" ]]; then
+    fatal "Cannot combine --use-jemalloc with Google TCMalloc"
   fi
   cmake_opts+=( "-DYB_GOOGLE_TCMALLOC=1" )
 fi

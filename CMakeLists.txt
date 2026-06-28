@@ -751,14 +751,16 @@ configure_macos_sdk()
 
 yb_find_third_party_dependencies()
 
-# Flags to link the tcmalloc static library. Used for each CMake target that is an executable,
-# as well as for executables generated as part of Postgres build.
+# Flags to link the tcmalloc / jemalloc static library. Used for each CMake target that is an
+# executable, as well as for executables generated as part of Postgres build.
 set(TCMALLOC_STATIC_LIB_LD_FLAGS "")
+set(JEMALLOC_STATIC_LIB_LD_FLAGS "")
 
-# Set flags based on whether we are using tcmalloc.
-if ("${YB_TCMALLOC_ENABLED}" STREQUAL "1" OR IS_SANITIZER)
+# Set flags based on whether we are using tcmalloc or jemalloc (both replace malloc).
+if ("${YB_TCMALLOC_ENABLED}" STREQUAL "1" OR "${YB_JEMALLOC_ENABLED}" STREQUAL "1" OR IS_SANITIZER)
   message("Configuring linker undefined-symbol policy "
-          "(YB_TCMALLOC_ENABLED=${YB_TCMALLOC_ENABLED}, build type is ${YB_BUILD_TYPE})")
+          "(YB_TCMALLOC_ENABLED=${YB_TCMALLOC_ENABLED}, "
+          "YB_JEMALLOC_ENABLED=${YB_JEMALLOC_ENABLED}, build type is ${YB_BUILD_TYPE})")
   # macOS is handled by neither branch below: it links strictly by default (the macOS default is
   # "-undefined error"). See the detailed rationale next to the yb_allow_flat_namespace_lookup()
   # calls after the src/yb subdirectories are added.
@@ -780,13 +782,20 @@ if ("${YB_TCMALLOC_ENABLED}" STREQUAL "1" OR IS_SANITIZER)
     # macOS links the shared tcmalloc (see the add_executable wrapper in YugabyteFunctions.cmake),
     # which installs a malloc zone at load time; no force_load of the static archive is needed.
     set(TCMALLOC_STATIC_LIB_LD_FLAGS "")
+    set(JEMALLOC_STATIC_LIB_LD_FLAGS "")
   else()
-    set(TCMALLOC_STATIC_LIB_LD_FLAGS
-        "-Wl,--whole-archive ${TCMALLOC_STATIC_LIB} -Wl,--no-whole-archive")
+    if ("${YB_TCMALLOC_ENABLED}" STREQUAL "1")
+      set(TCMALLOC_STATIC_LIB_LD_FLAGS
+          "-Wl,--whole-archive ${TCMALLOC_STATIC_LIB} -Wl,--no-whole-archive")
+    endif()
+    if ("${YB_JEMALLOC_ENABLED}" STREQUAL "1")
+      set(JEMALLOC_STATIC_LIB_LD_FLAGS
+          "-Wl,--whole-archive ${JEMALLOC_STATIC_LIB} -Wl,--no-whole-archive")
+    endif()
   endif()
 elseif(NOT APPLE)
   message("Not allowing any undefined symbols "
-          "(tcmalloc is disabled and build type is ${YB_BUILD_TYPE})")
+          "(tcmalloc/jemalloc are disabled and build type is ${YB_BUILD_TYPE})")
   ADD_LINKER_FLAGS("-Wl,--no-undefined -Wl,--no-allow-shlib-undefined")
 endif()
 
@@ -798,6 +807,10 @@ if (NOT "$ENV{YB_VALGRIND_PATH}" STREQUAL "")
   if ("${YB_TCMALLOC_ENABLED}" STREQUAL "1")
     message(FATAL_ERROR "Valgrind cannot be used while TCMalloc is enabled. "
             "Build with --no-tcmalloc to use Valgrind.")
+  endif()
+  if ("${YB_JEMALLOC_ENABLED}" STREQUAL "1")
+    message(FATAL_ERROR "Valgrind cannot be used while jemalloc is enabled. "
+            "Build without --use-jemalloc to use Valgrind.")
   endif()
   ADD_CXX_FLAGS("-DYB_VALGRIND_PATH=$ENV{YB_VALGRIND_PATH}")
 endif()

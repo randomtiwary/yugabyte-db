@@ -96,6 +96,7 @@ set(SERVER_PROCESS_SRCS
   server_base.cc
   server_base_options.cc
   server_common_flags.cc
+  jemalloc_metrics.cc
   tcmalloc_metrics.cc
   total_mem_watcher.cc
   tracing-path-handlers.cc
@@ -125,6 +126,10 @@ if("${YB_TCMALLOC_ENABLED}" STREQUAL "1")
     # force-loaded into executables instead.
     target_link_libraries(server_process tcmalloc)
   endif()
+endif()
+
+if(APPLE AND "${YB_JEMALLOC_ENABLED}" STREQUAL "1")
+  target_link_libraries(server_process jemalloc)
 endif()
 
 #########################################

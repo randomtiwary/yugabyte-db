@@ -53,6 +53,7 @@
 #include "yb/util/mutex.h"
 #include "yb/util/random.h"
 #include "yb/util/strongly_typed_bool.h"
+#include "yb/util/jemalloc_util.h"
 #include "yb/util/tcmalloc_util.h"
 
 namespace yb {
@@ -62,6 +63,7 @@ class MetricEntity;
 using MemTrackerPtr = std::shared_ptr<MemTracker>;
 
 static const std::string kTCMallocTrackerNamePrefix = "TCMalloc ";
+static const std::string kJEMallocTrackerNamePrefix = "JEMalloc ";
 static const std::string kUntrackedTrackerName = "Untracked memory";
 
 // Garbage collector is used by MemTracker to free memory allocated by caches when reached
@@ -163,6 +165,8 @@ class MemTracker : public std::enable_shared_from_this<MemTracker> {
 
   static void ConfigureTCMalloc();
   static void PrintTCMallocConfigs();
+  // Configures jemalloc when the build was made with --use-jemalloc; no-op otherwise.
+  static void ConfigureJEMalloc();
 
   // Removes this tracker from its parent's children. This tracker retains its
   // link to its parent. Must be called on a tracker with a parent.

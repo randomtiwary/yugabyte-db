@@ -77,6 +77,9 @@ Build options:
     Use Google's implementation of tcmalloc from https://github.com/google/tcmalloc
   --no-google-tcmalloc, --use-gperftools-tcmalloc, --gperftools-tcmalloc
     Use the gperftools implementation of tcmalloc
+  --use-jemalloc, --jemalloc
+    Opt-in: use jemalloc instead of tcmalloc (default is off; existing allocators unchanged).
+    Requires jemalloc headers/libs in the third-party tree or on the system.
 
   --clean-postgres
     Do a clean build of the PostgreSQL subtree.
@@ -342,6 +345,7 @@ set_default_yb_build_args() {
   make_targets=()
   no_tcmalloc=false
   must_use_tcmalloc=false
+  use_jemalloc=false
   cxx_test_name=""
   test_existence_check=true
   object_files_to_delete=()
@@ -564,6 +568,11 @@ parse_yb_build_cmd_line() {
       --use-google-tcmalloc|--google-tcmalloc)
         use_google_tcmalloc=true
         must_use_tcmalloc=true
+      ;;
+      --use-jemalloc|--jemalloc)
+        use_jemalloc=true
+        no_tcmalloc=true
+        use_google_tcmalloc=false
       ;;
       --cxx-test|--ct)
         set_cxx_test_name "$2"

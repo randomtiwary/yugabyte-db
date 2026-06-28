@@ -230,6 +230,18 @@ if("${YB_TCMALLOC_ENABLED}" STREQUAL "1")
     # https://gist.githubusercontent.com/mbautin/6cbef12e6bbab79d1f87964f571d2d46/raw
     string(APPEND PG_EXE_LD_FLAGS_AFTER_YB_LIBS " -lstdc++ -lunwind")
   endif()
+elseif("${YB_JEMALLOC_ENABLED}" STREQUAL "1")
+  # Mirror the jemalloc link flags used for YB executables (see YugabyteFunctions.cmake).
+  set(PG_EXE_LD_FLAGS_AFTER_YB_LIBS "${JEMALLOC_STATIC_LIB_LD_FLAGS} -lpthread -lm")
+  if(NOT APPLE)
+    string(APPEND PG_EXE_LD_FLAGS_AFTER_YB_LIBS " -ldl")
+  endif()
+  if(IS_CLANG AND NOT IS_ASAN)
+    string(APPEND PG_EXE_LD_FLAGS_AFTER_YB_LIBS " -lc++")
+  endif()
+  if(IS_GCC)
+    string(APPEND PG_EXE_LD_FLAGS_AFTER_YB_LIBS " -lstdc++ -lunwind")
+  endif()
 endif()
 
 yb_put_string_vars_into_cache(

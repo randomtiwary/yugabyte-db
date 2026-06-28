@@ -201,6 +201,10 @@ std::shared_ptr<MemTracker> CreateRootTracker() {
   LOG_IF(INFO, log_root_tracker_details)
       << "Creating root MemTracker with garbage collection threshold "
       << FLAGS_mem_tracker_tcmalloc_gc_release_bytes << " bytes";
+#elif YB_JEMALLOC_ENABLED
+  consumption_functor = &GetJEMallocActualHeapSizeBytes;
+  LOG_IF(INFO, log_root_tracker_details)
+      << "Creating root MemTracker using jemalloc resident bytes for consumption";
 #endif
 
   LOG_IF(INFO, log_root_tracker_details) << "Root memory limit is " << limit;
@@ -255,6 +259,10 @@ void MemTracker::PrintTCMallocConfigs() {
 void MemTracker::ConfigureTCMalloc() {
   ::yb::ConfigureTCMalloc(MemTracker::GetRootTracker()->limit());
   RegisterTCMallocTraceHooks();
+}
+
+void MemTracker::ConfigureJEMalloc() {
+  ::yb::ConfigureJEMalloc(MemTracker::GetRootTracker()->limit());
 }
 
 shared_ptr<MemTracker> MemTracker::CreateTracker(int64_t byte_limit,
@@ -822,9 +830,16 @@ bool MemTracker::GcTcmallocIfNeeded() {
     extra -= 1024 * 1024;
   }
   return true;
+#elif YB_JEMALLOC_ENABLED
+  released_memory_since_gc = 0;
+  TRACE_EVENT0("process", "MemTracker::GcTcmallocIfNeeded");
+  // Ask jemalloc to purge dirty pages; we don't have a fine-grained free-list
+  // percentage analog, so always attempt a purge when GC is triggered.
+  JEMallocReleaseMemoryToSystem();
+  return true;
 #else
   return false;
-#endif  // YB_TCMALLOC_ENABLED
+#endif  // YB_TCMALLOC_ENABLED / YB_JEMALLOC_ENABLED
 }
 
 string MemTracker::LogUsage(const string& prefix, int64_t usage_threshold, int indent) const {
@@ -878,6 +893,7 @@ uint64_t MemTracker::GetTrackedMemory() {
   uint64_t tracked_memory = 0;
   for (const auto& child_tracker : GetRootTracker()->ListChildren()) {
     if (!child_tracker->id().starts_with(kTCMallocTrackerNamePrefix) &&
+        !child_tracker->id().starts_with(kJEMallocTrackerNamePrefix) &&
         child_tracker->id() != kUntrackedTrackerName) {
       tracked_memory += child_tracker->consumption();
     }
@@ -889,6 +905,8 @@ uint64_t MemTracker::GetUntrackedMemory() {
   #if YB_TCMALLOC_ENABLED
   // generic.current_allocated_bytes = root - tcmalloc
   return ::yb::GetTCMallocProperty("generic.current_allocated_bytes") - GetTrackedMemory();
+  #elif YB_JEMALLOC_ENABLED
+  return static_cast<uint64_t>(GetJEMallocAllocatedBytes()) - GetTrackedMemory();
   #endif
   return 0;
 }
