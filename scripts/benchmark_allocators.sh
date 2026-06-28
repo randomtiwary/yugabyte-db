@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Prefer the fully automated entrypoint:
+#   ./scripts/run_allocator_insert_benchmark.sh
+#
 # Benchmark real YugabyteDB YSQL INSERTs under TCMalloc vs jemalloc builds.
 #
 # This drives INSERT traffic against a live cluster (via ysqlsh), not an in-process
