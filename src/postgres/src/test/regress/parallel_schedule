@@ -53,7 +53,7 @@ test: create_index create_index_spgist create_view index_including index_includi
 # ----------
 # Another group of parallel tests
 # ----------
-test: create_aggregate create_function_sql create_cast constraints triggers select inherit typed_table vacuum drop_if_exists updatable_views roleattributes create_am hash_func errors infinite_recurse
+test: create_aggregate create_function_sql create_cast constraints triggers select inherit typed_table vacuum drop_if_exists updatable_views roleattributes create_am hash_func errors infinite_recurse create_property_graph
 
 # ----------
 # sanity_check does a vacuum, affecting the sort order of SELECT *
@@ -106,7 +106,7 @@ test: publication subscription
 # Another group of parallel tests
 # select_views depends on create_view
 # ----------
-test: select_views portals_p2 foreign_key cluster dependency guc bitmapops combocid tsearch tsdicts foreign_data window xmlmap functional_deps advisory_lock indirect_toast equivclass
+test: select_views portals_p2 foreign_key cluster dependency guc bitmapops combocid tsearch tsdicts foreign_data window xmlmap functional_deps advisory_lock indirect_toast equivclass graph_table
 
 # ----------
 # Another group of parallel tests (JSON related)
@@ -127,7 +127,7 @@ test: plancache limit plpgsql copy2 temp domain rangefuncs prepare conversion tr
 # The stats test resets stats, so nothing else needing stats access can be in
 # this group.
 # ----------
-test: partition_join partition_prune reloptions hash_part indexing partition_aggregate partition_info tuplesort explain compression memoize stats
+test: partition_join partition_prune reloptions hash_part indexing partition_aggregate partition_info tuplesort explain compression memoize stats graph_table_rls graph_table_neon_examples
 
 # event_trigger cannot run concurrently with any test that runs DDL
 # oidjoins is read-only, though, and should run late for best coverage
