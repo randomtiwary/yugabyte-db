@@ -827,7 +827,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 	SAVEPOINT SCHEMA SCHEMAS SCROLL SEARCH SECOND_P SECURITY SELECT SEQUENCE SEQUENCES
 	SERIALIZABLE SERVER SESSION SESSION_USER SET SETS SETOF SHARE SHOW
-	SIMILAR SIMPLE SKIP SMALLINT SNAPSHOT SOME SQL_P STABLE STANDALONE_P
+	SIMILAR SIMPLE SKIP SMALLINT SNAPSHOT SOME SOURCE SQL_P STABLE STANDALONE_P
 	START STATEMENT STATISTICS STDIN STDOUT STORAGE STORED STRICT_P STRIP_P
 	SUBSCRIPTION SUBSTRING SUPPORT SYMMETRIC SYSID SYSTEM_P
 
@@ -10056,7 +10056,7 @@ element_table_properties:
 
 					$$ = (Node *) pr;
 				}
-			| PROPERTIES '(' labeled_expr_list ')'
+			| PROPERTIES '(' target_list ')'
 				{
 					PropGraphProperties *pr = makeNode(PropGraphProperties);
 
@@ -10191,7 +10191,7 @@ AlterPropGraphStmt:
 					$$ = (Node *) n;
 				}
 			| ALTER PROPERTY GRAPH qualified_name ALTER vertex_or_edge TABLE name
-				ALTER LABEL name ADD_P PROPERTIES '(' labeled_expr_list ')'
+				ALTER LABEL name ADD_P PROPERTIES '(' target_list ')'
 				{
 					AlterPropGraphStmt *n = makeNode(AlterPropGraphStmt);
 					PropGraphProperties *pr = makeNode(PropGraphProperties);
@@ -14771,7 +14771,7 @@ table_ref:	relation_expr opt_alias_clause
 					n->alias = $3;
 					$$ = (Node *) n;
 				}
-			| GRAPH_TABLE '(' qualified_name MATCH graph_pattern COLUMNS '(' labeled_expr_list ')' ')' opt_alias_clause
+			| GRAPH_TABLE '(' qualified_name MATCH graph_pattern COLUMNS '(' target_list ')' ')' opt_alias_clause
 				{
 					RangeGraphTable *n = makeNode(RangeGraphTable);
 
@@ -16187,7 +16187,6 @@ a_expr:		c_expr									{ $$ = $1; }
 			| a_expr '%' a_expr
 				{ $$ = (Node *) makeSimpleA_Expr(AEXPR_OP, "%", $1, $3, @2); }
 			| a_expr '^' a_expr
-			| EDGE
 				{ $$ = (Node *) makeSimpleA_Expr(AEXPR_OP, "^", $1, $3, @2); }
 			| a_expr '<' a_expr
 				{ $$ = (Node *) makeSimpleA_Expr(AEXPR_OP, "<", $1, $3, @2); }
@@ -18508,6 +18507,7 @@ unreserved_keyword:
 			| DOUBLE_P
 			| DROP
 			| EACH
+| EDGE
 			| ENABLE_P
 			| ENCODING
 			| ENCRYPTED
@@ -18686,6 +18686,7 @@ unreserved_keyword:
 			| SIMPLE
 			| SKIP
 			| SNAPSHOT
+| SOURCE
 			| SQL_P
 			| STABLE
 			| STANDALONE_P
@@ -19304,6 +19305,7 @@ bare_label_keyword:
 			| SMALLINT
 			| SNAPSHOT
 			| SOME
+| SOURCE
 			| SQL_P
 			| STABLE
 			| STANDALONE_P
