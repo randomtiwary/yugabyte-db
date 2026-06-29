@@ -24,7 +24,6 @@
  *		typedef struct FormData_pg_propgraph_label_property
  * ----------------
  */
-BEGIN_CATALOG_STRUCT
 
 CATALOG(pg_propgraph_label_property,8318,PropgraphLabelPropertyRelationId)
 {
@@ -44,7 +43,6 @@ CATALOG(pg_propgraph_label_property,8318,PropgraphLabelPropertyRelationId)
 #endif
 } FormData_pg_propgraph_label_property;
 
-END_CATALOG_STRUCT
 
 /* ----------------
  *		Form_pg_propgraph_label_property corresponds to a pointer to a tuple with
@@ -55,8 +53,8 @@ typedef FormData_pg_propgraph_label_property *Form_pg_propgraph_label_property;
 
 DECLARE_TOAST(pg_propgraph_label_property, 8319, 8320);
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_propgraph_label_property_oid_index, 8328, PropgraphLabelPropertyObjectIndexId, pg_propgraph_label_property, btree(oid oid_ops));
-DECLARE_UNIQUE_INDEX(pg_propgraph_label_property_label_prop_index, 8329, PropgraphLabelPropertyLabelPropIndexId, pg_propgraph_label_property, btree(plpellabelid oid_ops, plppropid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_propgraph_label_property_oid_index, 8328, PropgraphLabelPropertyObjectIndexId, on pg_propgraph_label_property using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_propgraph_label_property_label_prop_index, 8329, PropgraphLabelPropertyLabelPropIndexId, on pg_propgraph_label_property using btree(plpellabelid oid_ops, plppropid oid_ops));
 
 MAKE_SYSCACHE(PROPGRAPHLABELPROP, pg_propgraph_label_property_label_prop_index, 128);
 

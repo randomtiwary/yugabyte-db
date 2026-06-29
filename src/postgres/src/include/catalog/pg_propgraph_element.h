@@ -25,7 +25,6 @@
  *		typedef struct FormData_pg_propgraph_element
  * ----------------
  */
-BEGIN_CATALOG_STRUCT
 
 CATALOG(pg_propgraph_element,8299,PropgraphElementRelationId)
 {
@@ -88,7 +87,6 @@ CATALOG(pg_propgraph_element,8299,PropgraphElementRelationId)
 #endif
 } FormData_pg_propgraph_element;
 
-END_CATALOG_STRUCT
 
 /* ----------------
  *		Form_pg_propgraph_element corresponds to a pointer to a tuple with
@@ -99,8 +97,8 @@ typedef FormData_pg_propgraph_element *Form_pg_propgraph_element;
 
 DECLARE_TOAST(pg_propgraph_element, 8315, 8316);
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_propgraph_element_oid_index, 8300, PropgraphElementObjectIndexId, pg_propgraph_element, btree(oid oid_ops));
-DECLARE_UNIQUE_INDEX(pg_propgraph_element_alias_index, 8301, PropgraphElementAliasIndexId, pg_propgraph_element, btree(pgepgid oid_ops, pgealias name_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_propgraph_element_oid_index, 8300, PropgraphElementObjectIndexId, on pg_propgraph_element using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_propgraph_element_alias_index, 8301, PropgraphElementAliasIndexId, on pg_propgraph_element using btree(pgepgid oid_ops, pgealias name_ops));
 
 MAKE_SYSCACHE(PROPGRAPHELOID, pg_propgraph_element_oid_index, 128);
 MAKE_SYSCACHE(PROPGRAPHELALIAS, pg_propgraph_element_alias_index, 128);
