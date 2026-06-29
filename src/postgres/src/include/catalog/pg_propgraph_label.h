@@ -46,6 +46,5 @@ typedef FormData_pg_propgraph_label *Form_pg_propgraph_label;
 DECLARE_UNIQUE_INDEX_PKEY(pg_propgraph_label_oid_index, 8304, PropgraphLabelObjectIndexId, on pg_propgraph_label using btree(oid oid_ops));
 DECLARE_UNIQUE_INDEX(pg_propgraph_label_graph_name_index, 8314, PropgraphLabelGraphNameIndexId, on pg_propgraph_label using btree(pglpgid oid_ops, pgllabel name_ops));
 
-MAKE_SYSCACHE(PROPGRAPHLABELNAME, pg_propgraph_label_graph_name_index, 128);
 
 #endif							/* PG_PROPGRAPH_LABEL_H */

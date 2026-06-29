@@ -1214,10 +1214,19 @@ transformFromClauseItem(ParseState *pstate, Node *n,
 		return (Node *) rtr;
 	}
 	else if (IsA(n, RangeGraphTable))
-		{
-			nsitem = transformRangeGraphTable(pstate, (RangeGraphTable *) n);
-		}
-		else if (IsA(n, RangeTableFunc))
+	{
+		/* GRAPH_TABLE is like a plain relation / table function */
+		RangeTblRef *rtr;
+		ParseNamespaceItem *nsitem;
+
+		nsitem = transformRangeGraphTable(pstate, (RangeGraphTable *) n);
+		*top_nsitem = nsitem;
+		*namespace = list_make1(nsitem);
+		rtr = makeNode(RangeTblRef);
+		rtr->rtindex = nsitem->p_rtindex;
+		return (Node *) rtr;
+	}
+	else if (IsA(n, RangeTableFunc))
 	{
 		/* table function is like a plain relation */
 		RangeTblRef *rtr;

@@ -15,6 +15,8 @@
 
 #include "postgres.h"
 
+#include "nodes/yb_pgq_compat.h"
+
 #include "pg_yb_utils.h"
 
 #include "access/genam.h"

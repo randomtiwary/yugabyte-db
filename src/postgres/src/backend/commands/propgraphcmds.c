@@ -12,13 +12,8 @@
  */
 #include "postgres.h"
 
-#ifndef foreach_oid
-#define foreach_oid(var, lst) \
-	for (ListCell *_foreach_oid_cell = list_head(lst); \
-		 _foreach_oid_cell != NULL; \
-		 _foreach_oid_cell = lnext(lst, _foreach_oid_cell)) \
-		if (((var) = lfirst_oid(_foreach_oid_cell)) || true)
-#endif
+#include "nodes/yb_pgq_compat.h"
+
 
 
 #include "pg_yb_utils.h"
@@ -138,7 +133,7 @@ CreatePropGraph(ParseState *pstate, const CreatePropGraphStmt *stmt)
 		struct element_info *vinfo;
 		Relation	rel;
 
-		vinfo = palloc0(sizeof(struct element_info);
+		vinfo = palloc0(sizeof(struct element_info));
 		vinfo->kind = PGEKIND_VERTEX;
 
 		vinfo->relid = RangeVarGetRelidExtended(vertex->vtable, AccessShareLock, 0, RangeVarCallbackOwnsRelation, NULL);
@@ -181,7 +176,7 @@ CreatePropGraph(ParseState *pstate, const CreatePropGraphStmt *stmt)
 		Relation	srcrel;
 		Relation	destrel;
 
-		einfo = palloc0(sizeof(struct element_info);
+		einfo = palloc0(sizeof(struct element_info));
 		einfo->kind = PGEKIND_EDGE;
 
 		einfo->relid = RangeVarGetRelidExtended(edge->etable, AccessShareLock, 0, RangeVarCallbackOwnsRelation, NULL);
@@ -341,7 +336,7 @@ propgraph_element_get_key(ParseState *pstate, const List *key_clause, Relation e
 
 	if (key_clause == NIL)
 	{
-		Oid			pkidx = RelationGetPrimaryKeyIndex(element_rel, false);
+		Oid			pkidx = RelationGetPrimaryKeyIndex(element_rel);
 
 		if (!pkidx)
 			ereport(ERROR,
@@ -1135,8 +1130,8 @@ check_element_properties(Oid peoid)
 						elform = (Form_pg_propgraph_element) GETSTRUCT(tuple3);
 						dpcontext = deparse_context_for(get_rel_name(elform->pgerelid), elform->pgerelid);
 
-						dpa = deparse_expression(na, dpcontext, false, false);
-						dpb = deparse_expression(nb, dpcontext, false, false);
+						dpa = deparse_expression(na, dpcontext, false, false, false, false);
+						dpb = deparse_expression(nb, dpcontext, false, false, false, false);
 
 						/*
 						 * show in sorted order to keep output independent of
@@ -1331,7 +1326,7 @@ AlterPropGraph(ParseState *pstate, const AlterPropGraphStmt *stmt)
 		Relation	rel;
 		Oid			peoid;
 
-		vinfo = palloc0(sizeof(struct element_info);
+		vinfo = palloc0(sizeof(struct element_info));
 		vinfo->kind = PGEKIND_VERTEX;
 
 		vinfo->relid = RangeVarGetRelidExtended(vertex->vtable, AccessShareLock, 0, RangeVarCallbackOwnsRelation, NULL);
@@ -1381,7 +1376,7 @@ AlterPropGraph(ParseState *pstate, const AlterPropGraphStmt *stmt)
 		Relation	destrel;
 		Oid			peoid;
 
-		einfo = palloc0(sizeof(struct element_info);
+		einfo = palloc0(sizeof(struct element_info));
 		einfo->kind = PGEKIND_EDGE;
 
 		einfo->relid = RangeVarGetRelidExtended(edge->etable, AccessShareLock, 0, RangeVarCallbackOwnsRelation, NULL);

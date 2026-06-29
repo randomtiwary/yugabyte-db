@@ -93,14 +93,6 @@ enum SysCacheIdentifier
 	PUBLICATIONNAME,
 	PUBLICATIONNAMESPACE,
 	PUBLICATIONNAMESPACEMAP,
-	PROPGRAPHELOID,
-	PROPGRAPHELALIAS,
-	PROPGRAPHELEMENTLABELELEMENTLABEL,
-	PROPGRAPHLABELOID,
-	PROPGRAPHLABELNAME,
-	PROPGRAPHLABELPROP,
-	PROPGRAPHPROPOID,
-	PROPGRAPHPROPNAME,
 	PUBLICATIONOID,
 	PUBLICATIONREL,
 	PUBLICATIONRELMAP,
@@ -136,9 +128,17 @@ enum SysCacheIdentifier
 	USERMAPPINGOID,
 	USERMAPPINGUSERSERVER,
 	YBTABLEGROUPOID,
-	YBCONSTRAINTRELIDTYPIDNAME
+	YBCONSTRAINTRELIDTYPIDNAME,
+	PROPGRAPHELOID,
+	PROPGRAPHELALIAS,
+	PROPGRAPHELEMENTLABELELEMENTLABEL,
+	PROPGRAPHLABELOID,
+	PROPGRAPHLABELNAME,
+	PROPGRAPHLABELPROP,
+	PROPGRAPHPROPOID,
+	PROPGRAPHPROPNAME
 
-#define SysCacheSize (YBCONSTRAINTRELIDTYPIDNAME + 1)
+#define SysCacheSize (PROPGRAPHPROPNAME + 1)
 };
 
 typedef enum YbCatalogCacheTable
@@ -193,6 +193,11 @@ typedef enum YbCatalogCacheTable
 	YbCatalogCacheTable_pg_type,
 	YbCatalogCacheTable_pg_user_mapping,
 	YbCatalogCacheTable_pg_yb_tablegroup,
+	YbCatalogCacheTable_pg_propgraph_element,
+	YbCatalogCacheTable_pg_propgraph_element_label,
+	YbCatalogCacheTable_pg_propgraph_label,
+	YbCatalogCacheTable_pg_propgraph_label_property,
+	YbCatalogCacheTable_pg_propgraph_property,
 	YbAdhocCacheTable_pg_inherits
 
 #define YbNumCatalogCacheTables (YbAdhocCacheTable_pg_inherits + 1)

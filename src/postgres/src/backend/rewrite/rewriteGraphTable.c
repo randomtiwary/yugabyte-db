@@ -13,13 +13,10 @@
  */
 #include "postgres.h"
 
-#ifndef foreach_oid
-#define foreach_oid(var, lst) \
-	for (ListCell *_foreach_oid_cell = list_head(lst); \
-		 _foreach_oid_cell != NULL; \
-		 _foreach_oid_cell = lnext(lst, _foreach_oid_cell)) \
-		if (((var) = lfirst_oid(_foreach_oid_cell)) || true)
-#endif
+#include "utils/acl.h"
+
+#include "nodes/yb_pgq_compat.h"
+
 
 
 #include "pg_yb_utils.h"
@@ -513,8 +510,7 @@ generate_query_for_graph_path(RangeTblEntry *rte, List *graph_path)
 											NULL, true, false);
 		table_close(rel, NoLock);
 		path_query->rtable = lappend(path_query->rtable, pni->p_rte);
-		path_query->rteperminfos = lappend(path_query->rteperminfos, pni->p_perminfo);
-		pni->p_rte->perminfoindex = list_length(path_query->rteperminfos);
+		pni->p_rte->requiredPerms = ACL_SELECT;
 		rtr = makeNode(RangeTblRef);
 		rtr->rtindex = list_length(path_query->rtable);
 		fromlist = lappend(fromlist, rtr);
@@ -563,12 +559,12 @@ generate_query_for_graph_path(RangeTblEntry *rte, List *graph_path)
 	vars = pull_vars_of_level((Node *) list_make2(qual_exprs, path_query->targetList), 0);
 	foreach_node(Var, var, vars)
 	{
-		RTEPermissionInfo *perminfo = getRTEPermissionInfo(path_query->rteperminfos,
-														   rt_fetch(var->varno, path_query->rtable));
+		RangeTblEntry *rte = rt_fetch(var->varno, path_query->rtable);
 
+		rte->requiredPerms |= ACL_SELECT;
 		/* Must offset the attnum to fit in a bitmapset */
-		perminfo->selectedCols = bms_add_member(perminfo->selectedCols,
-												var->varattno - FirstLowInvalidHeapAttributeNumber);
+		rte->selectedCols = bms_add_member(rte->selectedCols,
+											var->varattno - FirstLowInvalidHeapAttributeNumber);
 	}
 
 	return path_query;
@@ -586,7 +582,6 @@ generate_query_for_empty_path_pattern(RangeTblEntry *rte)
 
 	query->commandType = CMD_SELECT;
 	query->rtable = NIL;
-	query->rteperminfos = NIL;
 	query->jointree = makeFromExpr(NIL, (Node *) makeBoolConst(false, false));
 
 	/*
@@ -647,7 +642,6 @@ generate_union_from_pathqueries(List **pathqueries)
 	union_query->commandType = CMD_SELECT;
 	union_query->rtable = rtable;
 	union_query->setOperations = (Node *) sostmt;
-	union_query->rteperminfos = NIL;
 	union_query->jointree = makeFromExpr(NIL, NULL);
 
 	/*
@@ -741,7 +735,7 @@ generate_setop_from_pathqueries(List *pathqueries, List **rtable, List **targetl
 	sostmt->all = true;
 	sostmt->larg = (Node *) lrtr;
 	sostmt->rarg = rarg;
-	constructSetOpTargetlist(NULL, sostmt, lquery->targetList, rtargetlist, targetlist, "UNION", false);
+	/* constructSetOpTargetlist not in PG15; targetList set from first branch */
 
 	return (Node *) sostmt;
 }

@@ -690,94 +690,6 @@ static const struct cachedesc cacheinfo[] = {
 		64
 	},
 
-	{PropgraphElementRelationId,		/* PROPGRAPHELOID */
-		PropgraphElementObjectIndexId,
-		1,
-		{
-			Anum_pg_propgraph_element_oid,
-			0,
-			0,
-			0
-		},
-		128
-	},
-	{PropgraphElementRelationId,		/* PROPGRAPHELALIAS */
-		PropgraphElementAliasIndexId,
-		2,
-		{
-			Anum_pg_propgraph_element_pgepgid,
-			Anum_pg_propgraph_element_pgealias,
-			0,
-			0
-		},
-		128
-	},
-	{PropgraphElementLabelRelationId,	/* PROPGRAPHELEMENTLABELELEMENTLABEL */
-		PropgraphElementLabelElementLabelIndexId,
-		2,
-		{
-			Anum_pg_propgraph_element_label_pgelelid,
-			Anum_pg_propgraph_element_label_pgellabelid,
-			0,
-			0
-		},
-		128
-	},
-	{PropgraphLabelRelationId,		/* PROPGRAPHLABELOID */
-		PropgraphLabelObjectIndexId,
-		1,
-		{
-			Anum_pg_propgraph_label_oid,
-			0,
-			0,
-			0
-		},
-		128
-	},
-	{PropgraphLabelRelationId,		/* PROPGRAPHLABELNAME */
-		PropgraphLabelGraphNameIndexId,
-		2,
-		{
-			Anum_pg_propgraph_label_pglpgid,
-			Anum_pg_propgraph_label_pgllabel,
-			0,
-			0
-		},
-		128
-	},
-	{PropgraphLabelPropertyRelationId,	/* PROPGRAPHLABELPROP */
-		PropgraphLabelPropertyLabelPropIndexId,
-		2,
-		{
-			Anum_pg_propgraph_label_property_plpellabelid,
-			Anum_pg_propgraph_label_property_plppropid,
-			0,
-			0
-		},
-		128
-	},
-	{PropgraphPropertyRelationId,		/* PROPGRAPHPROPOID */
-		PropgraphPropertyObjectIndexId,
-		1,
-		{
-			Anum_pg_propgraph_property_oid,
-			0,
-			0,
-			0
-		},
-		128
-	},
-	{PropgraphPropertyRelationId,		/* PROPGRAPHPROPNAME */
-		PropgraphPropertyNameIndexId,
-		2,
-		{
-			Anum_pg_propgraph_property_pgppgid,
-			Anum_pg_propgraph_property_pgpname,
-			0,
-			0
-		},
-		128
-	},
 	{PublicationRelationId,		/* PUBLICATIONOID */
 		PublicationObjectIndexId,
 		1,
@@ -1174,7 +1086,96 @@ static const struct cachedesc cacheinfo[] = {
 			0,
 		},
 		16
-	}
+	},
+	{PropgraphElementRelationId,		/* PROPGRAPHELOID */
+		PropgraphElementObjectIndexId,
+		1,
+		{
+			Anum_pg_propgraph_element_oid,
+			0,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphElementRelationId,		/* PROPGRAPHELALIAS */
+		PropgraphElementAliasIndexId,
+		2,
+		{
+			Anum_pg_propgraph_element_pgepgid,
+			Anum_pg_propgraph_element_pgealias,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphElementLabelRelationId,	/* PROPGRAPHELEMENTLABELELEMENTLABEL */
+		PropgraphElementLabelElementLabelIndexId,
+		2,
+		{
+			Anum_pg_propgraph_element_label_pgelelid,
+			Anum_pg_propgraph_element_label_pgellabelid,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphLabelRelationId,		/* PROPGRAPHLABELOID */
+		PropgraphLabelObjectIndexId,
+		1,
+		{
+			Anum_pg_propgraph_label_oid,
+			0,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphLabelRelationId,		/* PROPGRAPHLABELNAME */
+		PropgraphLabelGraphNameIndexId,
+		2,
+		{
+			Anum_pg_propgraph_label_pglpgid,
+			Anum_pg_propgraph_label_pgllabel,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphLabelPropertyRelationId,	/* PROPGRAPHLABELPROP */
+		PropgraphLabelPropertyLabelPropIndexId,
+		2,
+		{
+			Anum_pg_propgraph_label_property_plpellabelid,
+			Anum_pg_propgraph_label_property_plppropid,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphPropertyRelationId,		/* PROPGRAPHPROPOID */
+		PropgraphPropertyObjectIndexId,
+		1,
+		{
+			Anum_pg_propgraph_property_oid,
+			0,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphPropertyRelationId,		/* PROPGRAPHPROPNAME */
+		PropgraphPropertyNameIndexId,
+		2,
+		{
+			Anum_pg_propgraph_property_pgppgid,
+			Anum_pg_propgraph_property_pgpname,
+			0,
+			0
+		},
+		128
+	},
+
 };
 
 static const char *yb_cache_index_name_table[] = {
@@ -1263,6 +1264,14 @@ static const char *yb_cache_index_name_table[] = {
 	"pg_user_mapping_user_server_index",
 	"pg_yb_tablegroup_oid_index",
 	"pg_constraint_conrelid_contypid_conname_index",
+	"pg_propgraph_element_oid_index",
+	"pg_propgraph_element_alias_index",
+	"pg_propgraph_element_label_element_label_index",
+	"pg_propgraph_label_oid_index",
+	"pg_propgraph_label_graph_name_index",
+	"pg_propgraph_label_property_label_prop_index",
+	"pg_propgraph_property_oid_index",
+	"pg_propgraph_property_name_index"
 };
 
 static_assert(SysCacheSize == sizeof(yb_cache_index_name_table) /
@@ -1318,14 +1327,6 @@ char	   *SysCacheName[] = {
 	"PUBLICATIONNAME",
 	"PUBLICATIONNAMESPACE",
 	"PUBLICATIONNAMESPACEMAP",
-	"PROPGRAPHELOID",
-	"PROPGRAPHELALIAS",
-	"PROPGRAPHELEMENTLABELELEMENTLABEL",
-	"PROPGRAPHLABELOID",
-	"PROPGRAPHLABELNAME",
-	"PROPGRAPHLABELPROP",
-	"PROPGRAPHPROPOID",
-	"PROPGRAPHPROPNAME",
 	"PUBLICATIONOID",
 	"PUBLICATIONREL",
 	"PUBLICATIONRELMAP",
@@ -1361,7 +1362,15 @@ char	   *SysCacheName[] = {
 	"USERMAPPINGOID",
 	"USERMAPPINGUSERSERVER",
 	"YBTABLEGROUPOID",
-	"YBCONSTRAINTRELIDTYPIDNAME"
+	"YBCONSTRAINTRELIDTYPIDNAME",
+	"pg_propgraph_element_oid_index",
+	"pg_propgraph_element_alias_index",
+	"pg_propgraph_element_label_element_label_index",
+	"pg_propgraph_label_oid_index",
+	"pg_propgraph_label_graph_name_index",
+	"pg_propgraph_label_property_label_prop_index",
+	"pg_propgraph_property_oid_index",
+	"pg_propgraph_property_name_index"
 };
 
 static_assert(SysCacheSize == sizeof(SysCacheName) /
@@ -1420,7 +1429,13 @@ static const char *yb_cache_table_name_table[] = {
 	"pg_type",
 	"pg_user_mapping",
 	"pg_yb_tablegroup",
+	"pg_propgraph_element",
+	"pg_propgraph_element_label",
+	"pg_propgraph_label",
+	"pg_propgraph_label_property",
+	"pg_propgraph_property",
 	"pg_inherits"
+
 };
 
 static_assert(YbNumCatalogCacheTables ==
@@ -1515,6 +1530,14 @@ static YbCatalogCacheTable yb_catalog_cache_tables[] = {
 	YbCatalogCacheTable_pg_user_mapping,
 	YbCatalogCacheTable_pg_yb_tablegroup,
 	YbCatalogCacheTable_pg_constraint,
+	YbCatalogCacheTable_pg_propgraph_element,
+	YbCatalogCacheTable_pg_propgraph_element,
+	YbCatalogCacheTable_pg_propgraph_element_label,
+	YbCatalogCacheTable_pg_propgraph_label,
+	YbCatalogCacheTable_pg_propgraph_label,
+	YbCatalogCacheTable_pg_propgraph_label_property,
+	YbCatalogCacheTable_pg_propgraph_property,
+	YbCatalogCacheTable_pg_propgraph_property,
 };
 
 static_assert(SysCacheSize ==
@@ -2871,5 +2894,5 @@ YbCheckCatalogCacheIds()
 	 * but old PG backend cannot provide that message needed. In this case
 	 * interop isn't possible so we need to bump YbSharedInvalCatcacheMsgVersion.
 	 */
-	static_assert(SysCacheSize == 85, "new catalog cache id added");
+	static_assert(SysCacheSize == 93, "new catalog cache id added");
 }

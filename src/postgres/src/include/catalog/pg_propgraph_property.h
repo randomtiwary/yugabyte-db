@@ -55,6 +55,5 @@ typedef FormData_pg_propgraph_property *Form_pg_propgraph_property;
 DECLARE_UNIQUE_INDEX_PKEY(pg_propgraph_property_oid_index, 8307, PropgraphPropertyObjectIndexId, on pg_propgraph_property using btree(oid oid_ops));
 DECLARE_UNIQUE_INDEX(pg_propgraph_property_name_index, 8308, PropgraphPropertyNameIndexId, on pg_propgraph_property using btree(pgppgid oid_ops, pgpname name_ops));
 
-MAKE_SYSCACHE(PROPGRAPHPROPNAME, pg_propgraph_property_name_index, 128);
 
 #endif							/* PG_PROPGRAPH_PROPERTY_H */

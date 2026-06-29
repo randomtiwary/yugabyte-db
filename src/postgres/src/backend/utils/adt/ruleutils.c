@@ -8236,6 +8236,7 @@ get_name_for_var_field(Var *var, int fieldno,
 			/* else fall through to inspect the expression */
 			break;
 		case RTE_FUNCTION:
+		case RTE_GRAPH_TABLE:
 		case RTE_TABLEFUNC:
 
 			/*
@@ -11617,7 +11618,8 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 				if (rte->funcordinality)
 					appendStringInfoString(buf, " WITH ORDINALITY");
 				break;
-			case RTE_TABLEFUNC:
+			case RTE_GRAPH_TABLE:
+		case RTE_TABLEFUNC:
 				get_tablefunc(rte->tablefunc, context, true);
 				break;
 			case RTE_VALUES:
@@ -13138,6 +13140,10 @@ yb_decompile_pk_column_index_array(Datum column_index_array, Oid relId,
 }
 
 
+/*
+ * pg_get_propgraphdef - get the definition of a property graph
+/*
+ * pg_get_propgraphdef - get the definition of a property graph
  */
 Datum
 pg_get_propgraphdef(PG_FUNCTION_ARGS)
@@ -13231,7 +13237,7 @@ make_propgraphdef_elements(StringInfo buf, Oid pgrelid, char pgekind)
 		if (!isnull)
 		{
 			appendStringInfoString(buf, " KEY (");
-			decompile_column_index_array(datum, pgeform->pgerelid, false, buf);
+			decompile_column_index_array(datum, pgeform->pgerelid, buf);
 			appendStringInfoString(buf, ")");
 		}
 		else
@@ -13263,9 +13269,9 @@ make_propgraphdef_elements(StringInfo buf, Oid pgrelid, char pgekind)
 			if (srckey)
 			{
 				appendStringInfoString(buf, " KEY (");
-				decompile_column_index_array(srckey, pgeform->pgerelid, false, buf);
+				decompile_column_index_array(srckey, pgeform->pgerelid, buf);
 				appendStringInfo(buf, ") REFERENCES %s (", quote_identifier(NameStr(pgeform2->pgealias)));
-				decompile_column_index_array(srcref, pgeform2->pgerelid, false, buf);
+				decompile_column_index_array(srcref, pgeform2->pgerelid, buf);
 				appendStringInfoString(buf, ")");
 			}
 			else
@@ -13280,9 +13286,9 @@ make_propgraphdef_elements(StringInfo buf, Oid pgrelid, char pgekind)
 			if (destkey)
 			{
 				appendStringInfoString(buf, " KEY (");
-				decompile_column_index_array(destkey, pgeform->pgerelid, false, buf);
+				decompile_column_index_array(destkey, pgeform->pgerelid, buf);
 				appendStringInfo(buf, ") REFERENCES %s (", quote_identifier(NameStr(pgeform2->pgealias)));
-				decompile_column_index_array(destref, pgeform2->pgerelid, false, buf);
+				decompile_column_index_array(destref, pgeform2->pgerelid, buf);
 				appendStringInfoString(buf, ")");
 			}
 			else

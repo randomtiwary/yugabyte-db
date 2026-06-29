@@ -6360,12 +6360,6 @@ copyObjectImpl(const void *from)
 		case T_AlterPolicyStmt:
 			retval = _copyAlterPolicyStmt(from);
 			break;
-		case T_CreatePropGraphStmt:
-			retval = _copyCreatePropGraphStmt(from);
-			break;
-		case T_AlterPropGraphStmt:
-			retval = _copyAlterPropGraphStmt(from);
-			break;
 		case T_CreatePublicationStmt:
 			retval = _copyCreatePublicationStmt(from);
 			break;
