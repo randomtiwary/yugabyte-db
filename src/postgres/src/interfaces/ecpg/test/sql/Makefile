@@ -25,6 +25,7 @@ TESTS = array array.c \
         show show.c \
         insupd insupd.c \
         twophase twophase.c \
+        sqlpgq sqlpgq.c \
         insupd insupd.c \
 		declare declare.c \
 		bytea bytea.c \

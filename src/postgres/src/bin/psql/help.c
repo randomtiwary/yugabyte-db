@@ -243,9 +243,10 @@ slashUsage(unsigned short int pager)
 
 	HELP0("Informational\n");
 	HELP0("  (options: S = show system objects, + = additional detail)\n");
-	HELP0("  \\d[S+]                 list tables, views, and sequences\n");
-	HELP0("  \\d[S+]  NAME           describe table, view, sequence, or index\n");
+	HELP0("  \\d[S+]                 list tables, views, sequences, and property graphs\n");
+	HELP0("  \\d[S+]  NAME           describe table, view, sequence, index, or property graph\n");
 	HELP0("  \\da[S]  [PATTERN]      list aggregates\n");
+	HELP0("  \\dG[Sx+] [PATTERN]     list property graphs\n");
 	HELP0("  \\dA[+]  [PATTERN]      list access methods\n");
 	HELP0("  \\dAc[+] [AMPTRN [TYPEPTRN]]  list operator classes\n");
 	HELP0("  \\dAf[+] [AMPTRN [TYPEPTRN]]  list operator families\n");
