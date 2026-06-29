@@ -3985,6 +3985,20 @@ equal(const void *a, const void *b)
 		case T_RangeTableSample:
 			retval = _equalRangeTableSample(a, b);
 			break;
+
+		case T_RangeGraphTable:
+		case T_GraphPattern:
+		case T_GraphElementPattern:
+		case T_CreatePropGraphStmt:
+		case T_AlterPropGraphStmt:
+		case T_PropGraphVertex:
+		case T_PropGraphEdge:
+		case T_PropGraphLabelAndProperties:
+		case T_PropGraphProperties:
+		case T_GraphLabelRef:
+		case T_GraphPropertyRef:
+			/* Equality not required for these nodes currently */
+			return false;
 		case T_RangeTableFunc:
 			retval = _equalRangeTableFunc(a, b);
 			break;

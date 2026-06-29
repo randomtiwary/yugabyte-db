@@ -1605,4 +1605,29 @@ typedef struct OnConflictExpr
 	List	   *exclRelTlist;	/* tlist of the EXCLUDED pseudo relation */
 } OnConflictExpr;
 
+/*
+ * GraphLabelRef - label reference in label expression inside GRAPH_TABLE clause
+ */
+typedef struct GraphLabelRef
+{
+	NodeTag		type;
+	Oid			labelid;
+	int			location;
+} GraphLabelRef;
+
+/*
+ * GraphPropertyRef - property reference inside GRAPH_TABLE clause
+ */
+typedef struct GraphPropertyRef
+{
+	Expr		xpr;
+	const char *elvarname;
+	Oid			propid;
+	Oid			typeId;
+	int32		typmod;
+	Oid			collation;
+	int			location;
+} GraphPropertyRef;
+
+
 #endif							/* PRIMNODES_H */
