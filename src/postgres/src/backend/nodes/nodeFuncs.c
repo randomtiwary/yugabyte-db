@@ -50,6 +50,8 @@ exprType(const Node *expr)
 
 	switch (nodeTag(expr))
 	{
+		case T_GraphPropertyRef:
+		case T_GraphLabelRef:
 		case T_Var:
 			type = ((const Var *) expr)->vartype;
 			break;

@@ -51,6 +51,11 @@
 #include "catalog/pg_partitioned_table.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_publication.h"
+#include "catalog/pg_propgraph_element.h"
+#include "catalog/pg_propgraph_element_label.h"
+#include "catalog/pg_propgraph_label.h"
+#include "catalog/pg_propgraph_label_property.h"
+#include "catalog/pg_propgraph_property.h"
 #include "catalog/pg_publication_namespace.h"
 #include "catalog/pg_publication_rel.h"
 #include "catalog/pg_range.h"
@@ -684,6 +689,95 @@ static const struct cachedesc cacheinfo[] = {
 		},
 		64
 	},
+
+	{PropgraphElementRelationId,		/* PROPGRAPHELOID */
+		PropgraphElementObjectIndexId,
+		1,
+		{
+			Anum_pg_propgraph_element_oid,
+			0,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphElementRelationId,		/* PROPGRAPHELALIAS */
+		PropgraphElementAliasIndexId,
+		2,
+		{
+			Anum_pg_propgraph_element_pgepgid,
+			Anum_pg_propgraph_element_pgealias,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphElementLabelRelationId,	/* PROPGRAPHELEMENTLABELELEMENTLABEL */
+		PropgraphElementLabelElementLabelIndexId,
+		2,
+		{
+			Anum_pg_propgraph_element_label_pgelelid,
+			Anum_pg_propgraph_element_label_pgellabelid,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphLabelRelationId,		/* PROPGRAPHLABELOID */
+		PropgraphLabelObjectIndexId,
+		1,
+		{
+			Anum_pg_propgraph_label_oid,
+			0,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphLabelRelationId,		/* PROPGRAPHLABELNAME */
+		PropgraphLabelGraphNameIndexId,
+		2,
+		{
+			Anum_pg_propgraph_label_pglpgid,
+			Anum_pg_propgraph_label_pgllabel,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphLabelPropertyRelationId,	/* PROPGRAPHLABELPROP */
+		PropgraphLabelPropertyLabelPropIndexId,
+		2,
+		{
+			Anum_pg_propgraph_label_property_plpellabelid,
+			Anum_pg_propgraph_label_property_plppropid,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphPropertyRelationId,		/* PROPGRAPHPROPOID */
+		PropgraphPropertyObjectIndexId,
+		1,
+		{
+			Anum_pg_propgraph_property_oid,
+			0,
+			0,
+			0
+		},
+		128
+	},
+	{PropgraphPropertyRelationId,		/* PROPGRAPHPROPNAME */
+		PropgraphPropertyNameIndexId,
+		2,
+		{
+			Anum_pg_propgraph_property_pgppgid,
+			Anum_pg_propgraph_property_pgpname,
+			0,
+			0
+		},
+		128
+	},
 	{PublicationRelationId,		/* PUBLICATIONOID */
 		PublicationObjectIndexId,
 		1,
@@ -1224,6 +1318,14 @@ char	   *SysCacheName[] = {
 	"PUBLICATIONNAME",
 	"PUBLICATIONNAMESPACE",
 	"PUBLICATIONNAMESPACEMAP",
+	"PROPGRAPHELOID",
+	"PROPGRAPHELALIAS",
+	"PROPGRAPHELEMENTLABELELEMENTLABEL",
+	"PROPGRAPHLABELOID",
+	"PROPGRAPHLABELNAME",
+	"PROPGRAPHLABELPROP",
+	"PROPGRAPHPROPOID",
+	"PROPGRAPHPROPNAME",
 	"PUBLICATIONOID",
 	"PUBLICATIONREL",
 	"PUBLICATIONRELMAP",

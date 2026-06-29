@@ -363,7 +363,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 		DropOwnedStmt ReassignOwnedStmt
 		AlterTSConfigurationStmt AlterTSDictionaryStmt
 		CreateMatViewStmt RefreshMatViewStmt CreateAmStmt
-		CreatePublicationStmt AlterPublicationStmt
+		CreatePublicationStmt AlterPublicationStmt CreatePropGraphStmt AlterPropGraphStmt
 		CreateSubscriptionStmt AlterSubscriptionStmt DropSubscriptionStmt
 
 %type <node>	select_no_parens select_with_parens select_clause
@@ -690,6 +690,25 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 				yb_opt_concurrently_index
 %type <list>	oid_list yb_hash_index_expr_list yb_hash_index_expr_with_alias
 				yb_index_expr_list_hash_elems yb_split_point yb_split_points
+%type <node>	vertex_table_definition edge_table_definition graph_pattern
+			path_factor path_primary opt_is_label_expression
+			label_expression label_disjunction label_term
+			label_and_properties element_table_properties
+			opt_element_table_label_and_properties add_label
+%type <list>	vertex_tables_clause edge_tables_clause
+			opt_vertex_tables_clause opt_edge_tables_clause
+			vertex_table_list edge_table_list
+			opt_graph_table_key_clause
+			source_vertex_table destination_vertex_table
+			path_pattern_list path_pattern path_pattern_expression path_term
+			opt_graph_pattern_quantifier
+			label_and_properties_list add_label_list
+%type <ival>	vertex_or_edge
+%type <str>		opt_colid element_table_label_clause
+%type <alias>	opt_propgraph_table_alias
+%type <target>	labeled_expr
+%type <list>	labeled_expr_list
+
 %type <node>	YbBackfillIndexStmt YbCreateTableGroupStmt YbCreateProfileStmt
 				YbDropProfileStmt
 %type <rolespec> OptTableGroupOwner
@@ -713,7 +732,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
  */
 %token <str>	IDENT UIDENT FCONST SCONST USCONST BCONST XCONST Op
 %token <ival>	ICONST PARAM
-%token			TYPECAST DOT_DOT COLON_EQUALS EQUALS_GREATER
+%token			TYPECAST DOT_DOT COLON_EQUALS EQUALS_GREATER RIGHT_ARROW
 %token			LESS_EQUALS GREATER_EQUALS NOT_EQUALS
 
 /*
@@ -741,18 +760,18 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 	CURRENT_TIME CURRENT_TIMESTAMP CURRENT_USER CURSOR CYCLE
 
 	DATA_P DATABASE DAY_P DEALLOCATE DEC DECIMAL_P DECLARE DEFAULT DEFAULTS
-	DEFERRABLE DEFERRED DEFINER DELETE_P DELIMITER DELIMITERS DEPENDS DEPTH DESC
+	DEFERRABLE DEFERRED DEFINER DELETE_P DESTINATION DELIMITER DELIMITERS DEPENDS DEPTH DESC
 	DETACH DICTIONARY DISABLE_P DISCARD DISTINCT DO DOCUMENT_P DOMAIN_P
 	DOUBLE_P DROP
 
-	EACH ELSE ENABLE_P ENCODING ENCRYPTED END_P ENUM_P ESCAPE EVENT EXCEPT
+	EACH EDGE ELSE ENABLE_P ENCODING ENCRYPTED END_P ENUM_P ESCAPE EVENT EXCEPT
 	EXCLUDE EXCLUDING EXCLUSIVE EXECUTE EXISTS EXPLAIN EXPRESSION
 	EXTENSION EXTERNAL EXTRACT
 
 	FALSE_P FAMILY FETCH FILTER FINALIZE FIRST_P FLOAT_P FOLLOWING FOR
 	FORCE FOREIGN FORWARD FREEZE FROM FULL FUNCTION FUNCTIONS
 
-	GENERATED GLOBAL GRANT GRANTED GREATEST GROUP_P GROUPING GROUPS
+	GENERATED GLOBAL GRANT GRAPH GRAPH_TABLE GRANTED GREATEST GROUP_P GROUPING GROUPS
 
 	HANDLER HAVING HEADER_P HOLD HOUR_P
 
@@ -772,7 +791,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 	MAPPING MATCH MATCHED MATERIALIZED MAXVALUE MERGE METHOD
 	MINUTE_P MINVALUE MODE MONTH_P MOVE
 
-	NAME_P NAMES NATIONAL NATURAL NCHAR NEW NEXT NFC NFD NFKC NFKD NO NONE
+	NAME_P NAMES NATIONAL NATURAL NCHAR NEW NEXT NFC NFD NFKC NFKD NO NODE NONE
 	NORMALIZE NORMALIZED
 	NOT NOTHING NOTIFY NOTNULL NOWAIT NULL_P NULLIF
 	NULLS_P NUMERIC
@@ -784,18 +803,18 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 	PARALLEL PARAMETER PARSER PARTIAL PARTITION PASSING PASSWORD
 	PLACING PLANS POLICY
 	POSITION PRECEDING PRECISION PRESERVE PREPARE PREPARED PRIMARY
-	PRIOR PRIVILEGES PROCEDURAL PROCEDURE PROCEDURES PROGRAM PUBLICATION
+	PRIOR PRIVILEGES PROCEDURAL PROCEDURE PROCEDURES PROGRAM PROPERTIES PROPERTY PUBLICATION
 
 	QUOTE
 
-	RANGE READ REAL REASSIGN RECHECK RECURSIVE REF_P REFERENCES REFERENCING
+	RANGE READ REAL REASSIGN RECHECK RECURSIVE REF_P REFERENCES RELATIONSHIP REFERENCING
 	REFRESH REINDEX RELATIVE_P RELEASE RENAME REPEATABLE REPLACE REPLICA
 	RESET RESTART RESTRICT RETURN RETURNING RETURNS REVOKE RIGHT ROLE ROLLBACK ROLLUP
 	ROUTINE ROUTINES ROW ROWS RULE
 
 	SAVEPOINT SCHEMA SCHEMAS SCROLL SEARCH SECOND_P SECURITY SELECT SEQUENCE SEQUENCES
 	SERIALIZABLE SERVER SESSION SESSION_USER SET SETS SETOF SHARE SHOW
-	SIMILAR SIMPLE SKIP SMALLINT SNAPSHOT SOME SQL_P STABLE STANDALONE_P
+	SIMILAR SIMPLE SKIP SMALLINT SNAPSHOT SOME SOURCE SQL_P STABLE STANDALONE_P
 	START STATEMENT STATISTICS STDIN STDOUT STORAGE STORED STRICT_P STRIP_P
 	SUBSCRIPTION SUBSTRING SUPPORT SYMMETRIC SYSID SYSTEM_P
 
@@ -809,7 +828,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 	UNLISTEN UNLOGGED UNTIL UPDATE USER USING
 
 	VACUUM VALID VALIDATE VALIDATOR VALUE_P VALUES VARCHAR VARIADIC VARYING
-	VERBOSE VERSION_P VIEW VIEWS VOLATILE
+	VERBOSE VERTEX VERSION_P VIEW VIEWS VOLATILE
 
 	WHEN WHERE WHITESPACE_P WINDOW WITH WITHIN WITHOUT WORK WRAPPER WRITE
 
@@ -918,7 +937,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
   */
 %nonassoc   EXPR_LIST
 
-%left		Op OPERATOR		/* multi-character ops and user-defined operators */
+%left		Op OPERATOR RIGHT_ARROW '|'	/* multi-character ops and user-defined operators */
 %left		'+' '-'
 %left		'*' '/' '%'
 %left		'^'
@@ -1088,6 +1107,7 @@ stmt:
 			| AlterTblSpcStmt
 			| AlterCompositeTypeStmt
 			| AlterPublicationStmt
+			| AlterPropGraphStmt
 			| AlterRoleSetStmt
 			| AlterRoleStmt
 			| AlterSubscriptionStmt { parser_ybc_not_support(@1, "This statement"); }
@@ -1119,6 +1139,7 @@ stmt:
 			| CreateOpClassStmt
 			| CreateOpFamilyStmt
 			| CreatePublicationStmt
+			| CreatePropGraphStmt
 			| AlterOpFamilyStmt
 			| CreatePolicyStmt
 			| CreatePLangStmt
@@ -11306,6 +11327,368 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
  *
  *****************************************************************************/
 
+/*
+ *		CREATE PROPERTY GRAPH
+ *		ALTER PROPERTY GRAPH
+ *
+ *****************************************************************************/
+
+CreatePropGraphStmt: CREATE OptTemp PROPERTY GRAPH qualified_name opt_vertex_tables_clause opt_edge_tables_clause
+				{
+					CreatePropGraphStmt *n = makeNode(CreatePropGraphStmt);
+
+					n->pgname = $5;
+					n->pgname->relpersistence = $2;
+					n->vertex_tables = $6;
+					n->edge_tables = $7;
+
+					$$ = (Node *)n;
+				}
+		;
+
+opt_vertex_tables_clause:
+			vertex_tables_clause				{ $$ = $1; }
+			| /*EMPTY*/							{ $$ = NIL; }
+		;
+
+vertex_tables_clause:
+			vertex_synonym TABLES '(' vertex_table_list ')'	{ $$ = $4; }
+		;
+
+vertex_synonym: NODE | VERTEX
+		;
+
+vertex_table_list: vertex_table_definition						{ $$ = list_make1($1); }
+			| vertex_table_list ',' vertex_table_definition		{ $$ = lappend($1, $3); }
+		;
+
+vertex_table_definition: qualified_name opt_propgraph_table_alias opt_graph_table_key_clause
+				opt_element_table_label_and_properties
+				{
+					PropGraphVertex *n = makeNode(PropGraphVertex);
+
+					$1->alias = $2;
+					n->vtable = $1;
+					n->vkey = $3;
+					n->labels = $4;
+					n->location = @1;
+
+					$$ = (Node *) n;
+				}
+		;
+
+opt_propgraph_table_alias:
+			AS name
+				{
+					$$ = makeNode(Alias);
+					$$->aliasname = $2;
+				}
+			| /*EMPTY*/							{ $$ = NULL; }
+		;
+
+opt_graph_table_key_clause:
+			KEY '(' columnList ')'				{ $$ = $3; }
+			| /*EMPTY*/							{ $$ = NIL; }
+		;
+
+opt_edge_tables_clause:
+			edge_tables_clause					{ $$ = $1; }
+			| /*EMPTY*/							{ $$ = NIL; }
+		;
+
+edge_tables_clause:
+			edge_synonym TABLES '(' edge_table_list	')'			{ $$ = $4; }
+		;
+
+edge_synonym: EDGE | RELATIONSHIP
+		;
+
+edge_table_list: edge_table_definition						{ $$ = list_make1($1); }
+			| edge_table_list ',' edge_table_definition		{ $$ = lappend($1, $3); }
+		;
+
+edge_table_definition: qualified_name opt_propgraph_table_alias opt_graph_table_key_clause
+				source_vertex_table destination_vertex_table opt_element_table_label_and_properties
+				{
+					PropGraphEdge *n = makeNode(PropGraphEdge);
+
+					$1->alias = $2;
+					n->etable = $1;
+					n->ekey = $3;
+					n->esrckey = linitial($4);
+					n->esrcvertex = lsecond($4);
+					n->esrcvertexcols = lthird($4);
+					n->edestkey = linitial($5);
+					n->edestvertex = lsecond($5);
+					n->edestvertexcols = lthird($5);
+					n->labels = $6;
+					n->location = @1;
+
+					$$ = (Node *) n;
+				}
+		;
+
+source_vertex_table: SOURCE name
+				{
+					$$ = list_make3(NULL, $2, NULL);
+				}
+				| SOURCE KEY '(' columnList ')' REFERENCES name '(' columnList ')'
+				{
+					$$ = list_make3($4, $7, $9);
+				}
+		;
+
+destination_vertex_table: DESTINATION name
+				{
+					$$ = list_make3(NULL, $2, NULL);
+				}
+				| DESTINATION KEY '(' columnList ')' REFERENCES name '(' columnList ')'
+				{
+					$$ = list_make3($4, $7, $9);
+				}
+		;
+
+opt_element_table_label_and_properties:
+			element_table_properties
+				{
+					PropGraphLabelAndProperties *lp = makeNode(PropGraphLabelAndProperties);
+
+					lp->properties = (PropGraphProperties *) $1;
+					lp->location = @1;
+
+					$$ = list_make1(lp);
+				}
+			| label_and_properties_list
+				{
+					$$ = $1;
+				}
+			| /*EMPTY*/
+				{
+					PropGraphLabelAndProperties *lp = makeNode(PropGraphLabelAndProperties);
+					PropGraphProperties *pr = makeNode(PropGraphProperties);
+
+					pr->all = true;
+					pr->location = -1;
+					lp->properties = pr;
+					lp->location = -1;
+
+					$$ = list_make1(lp);
+				}
+		;
+
+element_table_properties:
+			NO PROPERTIES
+				{
+					PropGraphProperties *pr = makeNode(PropGraphProperties);
+
+					pr->properties = NIL;
+					pr->location = @1;
+
+					$$ = (Node *) pr;
+				}
+			| PROPERTIES ALL COLUMNS
+			/*
+			 * SQL standard also allows "PROPERTIES ARE ALL COLUMNS", but that
+			 * would require making ARE a keyword, which seems a bit much for
+			 * such a marginal use.  Could be added later if needed.
+			 */
+				{
+					PropGraphProperties *pr = makeNode(PropGraphProperties);
+
+					pr->all = true;
+					pr->location = @1;
+
+					$$ = (Node *) pr;
+				}
+			| PROPERTIES '(' labeled_expr_list ')'
+				{
+					PropGraphProperties *pr = makeNode(PropGraphProperties);
+
+					pr->properties = $3;
+					pr->location = @1;
+
+					$$ = (Node *) pr;
+				}
+		;
+
+label_and_properties_list:
+			label_and_properties
+				{
+					$$ = list_make1($1);
+				}
+			| label_and_properties_list label_and_properties
+				{
+					$$ = lappend($1, $2);
+				}
+		;
+
+label_and_properties:
+			element_table_label_clause
+				{
+					PropGraphLabelAndProperties *lp = makeNode(PropGraphLabelAndProperties);
+					PropGraphProperties *pr = makeNode(PropGraphProperties);
+
+					pr->all = true;
+					pr->location = -1;
+
+					lp->label = $1;
+					lp->properties = pr;
+					lp->location = @1;
+
+					$$ = (Node *) lp;
+				}
+			| element_table_label_clause element_table_properties
+				{
+					PropGraphLabelAndProperties *lp = makeNode(PropGraphLabelAndProperties);
+
+					lp->label = $1;
+					lp->properties = (PropGraphProperties *) $2;
+					lp->location = @1;
+
+					$$ = (Node *) lp;
+				}
+		;
+
+element_table_label_clause:
+			LABEL name
+				{
+					$$ = $2;
+				}
+			| DEFAULT LABEL
+				{
+					$$ = NULL;
+				}
+		;
+
+AlterPropGraphStmt:
+			ALTER PROPERTY GRAPH qualified_name ADD_P vertex_tables_clause
+				{
+					AlterPropGraphStmt *n = makeNode(AlterPropGraphStmt);
+
+					n->pgname = $4;
+					n->add_vertex_tables = $6;
+
+					$$ = (Node *) n;
+				}
+			| ALTER PROPERTY GRAPH qualified_name ADD_P vertex_tables_clause ADD_P edge_tables_clause
+				{
+					AlterPropGraphStmt *n = makeNode(AlterPropGraphStmt);
+
+					n->pgname = $4;
+					n->add_vertex_tables = $6;
+					n->add_edge_tables = $8;
+
+					$$ = (Node *) n;
+				}
+			| ALTER PROPERTY GRAPH qualified_name ADD_P edge_tables_clause
+				{
+					AlterPropGraphStmt *n = makeNode(AlterPropGraphStmt);
+
+					n->pgname = $4;
+					n->add_edge_tables = $6;
+
+					$$ = (Node *) n;
+				}
+			| ALTER PROPERTY GRAPH qualified_name DROP vertex_synonym TABLES '(' name_list ')' opt_drop_behavior
+				{
+					AlterPropGraphStmt *n = makeNode(AlterPropGraphStmt);
+
+					n->pgname = $4;
+					n->drop_vertex_tables = $9;
+					n->drop_behavior = $11;
+
+					$$ = (Node *) n;
+				}
+			| ALTER PROPERTY GRAPH qualified_name DROP edge_synonym TABLES '(' name_list ')' opt_drop_behavior
+				{
+					AlterPropGraphStmt *n = makeNode(AlterPropGraphStmt);
+
+					n->pgname = $4;
+					n->drop_edge_tables = $9;
+					n->drop_behavior = $11;
+
+					$$ = (Node *) n;
+				}
+			| ALTER PROPERTY GRAPH qualified_name ALTER vertex_or_edge TABLE name
+				add_label_list
+				{
+					AlterPropGraphStmt *n = makeNode(AlterPropGraphStmt);
+
+					n->pgname = $4;
+					n->element_kind = $6;
+					n->element_alias = $8;
+					n->add_labels = $9;
+
+					$$ = (Node *) n;
+				}
+			| ALTER PROPERTY GRAPH qualified_name ALTER vertex_or_edge TABLE name
+				DROP LABEL name opt_drop_behavior
+				{
+					AlterPropGraphStmt *n = makeNode(AlterPropGraphStmt);
+
+					n->pgname = $4;
+					n->element_kind = $6;
+					n->element_alias = $8;
+					n->drop_label = $11;
+					n->drop_behavior = $12;
+
+					$$ = (Node *) n;
+				}
+			| ALTER PROPERTY GRAPH qualified_name ALTER vertex_or_edge TABLE name
+				ALTER LABEL name ADD_P PROPERTIES '(' labeled_expr_list ')'
+				{
+					AlterPropGraphStmt *n = makeNode(AlterPropGraphStmt);
+					PropGraphProperties *pr = makeNode(PropGraphProperties);
+
+					n->pgname = $4;
+					n->element_kind = $6;
+					n->element_alias = $8;
+					n->alter_label = $11;
+
+					pr->properties = $15;
+					pr->location = @13;
+					n->add_properties = pr;
+
+					$$ = (Node *) n;
+				}
+			| ALTER PROPERTY GRAPH qualified_name ALTER vertex_or_edge TABLE name
+				ALTER LABEL name DROP PROPERTIES '(' name_list ')' opt_drop_behavior
+				{
+					AlterPropGraphStmt *n = makeNode(AlterPropGraphStmt);
+
+					n->pgname = $4;
+					n->element_kind = $6;
+					n->element_alias = $8;
+					n->alter_label = $11;
+					n->drop_properties = $15;
+					n->drop_behavior = $17;
+
+					$$ = (Node *) n;
+				}
+		;
+
+vertex_or_edge:
+			vertex_synonym						{ $$ = PROPGRAPH_ELEMENT_KIND_VERTEX; }
+			| edge_synonym						{ $$ = PROPGRAPH_ELEMENT_KIND_EDGE; }
+		;
+
+add_label_list:
+			add_label							{ $$ = list_make1($1); }
+			| add_label_list add_label			{ $$ = lappend($1, $2);	}
+		;
+
+add_label: ADD_P LABEL name element_table_properties
+				{
+					PropGraphLabelAndProperties *lp = makeNode(PropGraphLabelAndProperties);
+
+					lp->label = $3;
+					lp->properties = (PropGraphProperties *) $4;
+					lp->location = @1;
+
+					$$ = (Node *) lp;
+				}
+		;
+
 CreatePublicationStmt:
 			CREATE PUBLICATION name opt_definition
 				{
@@ -14877,6 +15260,18 @@ xmltable_column_el:
 
 					$$ = (Node *) fc;
 				}
+			| GRAPH_TABLE '(' qualified_name MATCH graph_pattern COLUMNS '(' labeled_expr_list ')' ')' opt_alias_clause
+				{
+					RangeGraphTable *n = makeNode(RangeGraphTable);
+
+					n->graph_name = $3;
+					n->graph_pattern = castNode(GraphPattern, $5);
+					n->columns = $8;
+					n->alias = $11;
+					n->location = @1;
+					$$ = (Node *) n;
+				}
+
 			| ColId Typename xmltable_column_option_list
 				{
 					RangeTableFuncCol *fc = makeNode(RangeTableFuncCol);
@@ -16598,6 +16993,22 @@ opt_xml_root_standalone: ',' STANDALONE_P YES_P
 				{ $$ = makeIntConst(XML_STANDALONE_OMITTED, -1); }
 		;
 
+labeled_expr_list:
+			labeled_expr							{ $$ = list_make1($1); }
+			| labeled_expr_list ',' labeled_expr	{ $$ = lappend($1, $3); }
+		;
+
+labeled_expr: a_expr AS ColLabel
+				{
+					$$ = makeNode(ResTarget);
+					$$->name = $3;
+					$$->indirection = NIL;
+					$$->val = (Node *) $1;
+					$$->location = @1;
+				}
+		;
+
+
 xml_attributes: XMLATTRIBUTES '(' xml_attribute_list ')'	{ $$ = $3; }
 		;
 
@@ -17752,6 +18163,208 @@ BareColLabel:	IDENT								{ $$ = $1; }
 
 /* "Unreserved" keywords --- available for use as any kind of name.
  */
+graph_pattern:
+			path_pattern_list where_clause
+				{
+					GraphPattern *gp = makeNode(GraphPattern);
+
+					gp->path_pattern_list = $1;
+					gp->whereClause = $2;
+					$$ = (Node *) gp;
+				}
+		;
+
+path_pattern_list:
+			path_pattern							{ $$ = list_make1($1); }
+			| path_pattern_list ',' path_pattern	{ $$ = lappend($1, $3); }
+		;
+
+path_pattern:
+			path_pattern_expression					{ $$ = $1; }
+		;
+
+/*
+ * path pattern expression
+ */
+
+path_pattern_expression:
+			path_term								{ $$ = $1; }
+			/* | path_multiset_alternation */
+			/* | path_pattern_union */
+		;
+
+path_term:
+			path_factor								{ $$ = list_make1($1); }
+			| path_term path_factor					{ $$ = lappend($1, $2); }
+		;
+
+path_factor:
+			path_primary opt_graph_pattern_quantifier
+				{
+					GraphElementPattern *gep = (GraphElementPattern *) $1;
+
+					gep->quantifier = $2;
+
+					$$ = (Node *) gep;
+				}
+		;
+
+path_primary:
+			'(' opt_colid opt_is_label_expression where_clause ')'
+				{
+					GraphElementPattern *gep = makeNode(GraphElementPattern);
+
+					gep->kind = VERTEX_PATTERN;
+					gep->variable = $2;
+					gep->labelexpr = $3;
+					gep->whereClause = $4;
+					gep->location = @1;
+
+					$$ = (Node *) gep;
+				}
+			/* full edge pointing left: <-[ xxx ]- */
+			| '<' '-' '[' opt_colid opt_is_label_expression where_clause ']' '-'
+				{
+					GraphElementPattern *gep = makeNode(GraphElementPattern);
+
+					gep->kind = EDGE_PATTERN_LEFT;
+					gep->variable = $4;
+					gep->labelexpr = $5;
+					gep->whereClause = $6;
+					gep->location = @1;
+
+					$$ = (Node *) gep;
+				}
+			/* full edge pointing right: -[ xxx ]-> */
+			| '-' '[' opt_colid opt_is_label_expression where_clause ']' '-' '>'
+				{
+					GraphElementPattern *gep = makeNode(GraphElementPattern);
+
+					gep->kind = EDGE_PATTERN_RIGHT;
+					gep->variable = $3;
+					gep->labelexpr = $4;
+					gep->whereClause = $5;
+					gep->location = @1;
+
+					$$ = (Node *) gep;
+				}
+			| '-' '[' opt_colid opt_is_label_expression where_clause ']' RIGHT_ARROW
+				{
+					GraphElementPattern *gep = makeNode(GraphElementPattern);
+
+					gep->kind = EDGE_PATTERN_RIGHT;
+					gep->variable = $3;
+					gep->labelexpr = $4;
+					gep->whereClause = $5;
+					gep->location = @1;
+
+					$$ = (Node *) gep;
+				}
+			/* full edge any direction: -[ xxx ]- */
+			| '-' '[' opt_colid opt_is_label_expression where_clause ']' '-'
+				{
+					GraphElementPattern *gep = makeNode(GraphElementPattern);
+
+					gep->kind = EDGE_PATTERN_ANY;
+					gep->variable = $3;
+					gep->labelexpr = $4;
+					gep->whereClause = $5;
+					gep->location = @1;
+
+					$$ = (Node *) gep;
+				}
+			/* abbreviated edge patterns */
+			| '<' '-'
+				{
+					GraphElementPattern *gep = makeNode(GraphElementPattern);
+
+					gep->kind = EDGE_PATTERN_LEFT;
+					gep->location = @1;
+
+					$$ = (Node *) gep;
+				}
+			| '-' '>'
+				{
+					GraphElementPattern *gep = makeNode(GraphElementPattern);
+
+					gep->kind = EDGE_PATTERN_RIGHT;
+					gep->location = @1;
+
+					$$ = (Node *) gep;
+				}
+			| RIGHT_ARROW
+				{
+					GraphElementPattern *gep = makeNode(GraphElementPattern);
+
+					gep->kind = EDGE_PATTERN_RIGHT;
+					gep->location = @1;
+
+					$$ = (Node *) gep;
+				}
+			| '-'
+				{
+					GraphElementPattern *gep = makeNode(GraphElementPattern);
+
+					gep->kind = EDGE_PATTERN_ANY;
+					gep->location = @1;
+
+					$$ = (Node *) gep;
+				}
+			| '(' path_pattern_expression where_clause ')'
+				{
+					GraphElementPattern *gep = makeNode(GraphElementPattern);
+
+					gep->kind = PAREN_EXPR;
+					gep->subexpr = $2;
+					gep->whereClause = $3;
+					gep->location = @1;
+
+					$$ = (Node *) gep;
+				}
+		;
+
+opt_colid:
+			ColId			{ $$ = $1; }
+			| /*EMPTY*/		{ $$ = NULL; }
+		;
+
+opt_is_label_expression:
+			IS label_expression		{ $$ = $2; }
+			| /*EMPTY*/				{ $$ = NULL; }
+		;
+
+/*
+ * graph pattern quantifier
+ */
+
+opt_graph_pattern_quantifier:
+			'{' Iconst '}'					{ $$ = list_make2_int($2, $2); }
+			| '{' ',' Iconst '}'			{ $$ = list_make2_int(0, $3); }
+			| '{' Iconst ',' Iconst '}'		{ $$ = list_make2_int($2, $4); }
+			| /*EMPTY*/						{ $$ = NULL; }
+		;
+
+/*
+ * label expression
+ */
+
+label_expression:
+			label_term
+			| label_disjunction
+		;
+
+label_disjunction:
+			label_expression '|' label_term
+				{ $$ = makeOrExpr($1, $3, @2); }
+		;
+
+label_term:
+			name
+				{ $$ = makeColumnRef($1, NIL, @1, yyscanner); }
+		;
+
+
+
 unreserved_keyword:
 			  ABORT_P
 			| ABSOLUTE_P
@@ -17821,6 +18434,7 @@ unreserved_keyword:
 			| DELIMITERS
 			| DEPENDS
 			| DEPTH
+			| DESTINATION
 			| DETACH
 			| DICTIONARY
 			| DISABLE_P
@@ -17830,6 +18444,7 @@ unreserved_keyword:
 			| DOUBLE_P
 			| DROP
 			| EACH
+			| EDGE
 			| ENABLE_P
 			| ENCODING
 			| ENCRYPTED
@@ -17856,6 +18471,7 @@ unreserved_keyword:
 			| GENERATED
 			| GLOBAL
 			| GRANTED
+			| GRAPH
 			| GROUPS
 			| HANDLER
 			| HEADER_P
@@ -17916,6 +18532,7 @@ unreserved_keyword:
 			| NFKC
 			| NFKD
 			| NO
+			| NODE
 			| NORMALIZED
 			| NOTHING
 			| NOTIFY
@@ -17954,6 +18571,8 @@ unreserved_keyword:
 			| PROCEDURE
 			| PROCEDURES
 			| PROGRAM
+			| PROPERTIES
+			| PROPERTY
 			| PUBLICATION
 			| QUOTE
 			| RANGE
@@ -17965,6 +18584,7 @@ unreserved_keyword:
 			| REFERENCING
 			| REFRESH
 			| REINDEX
+			| RELATIONSHIP
 			| RELATIVE_P
 			| RELEASE
 			| RENAME
@@ -18003,6 +18623,7 @@ unreserved_keyword:
 			| SIMPLE
 			| SKIP
 			| SNAPSHOT
+			| SOURCE
 			| SQL_P
 			| STABLE
 			| STANDALONE_P
@@ -18049,6 +18670,7 @@ unreserved_keyword:
 			| VALUE_P
 			| VARYING
 			| VERSION_P
+			| VERTEX
 			| VIEW
 			| VIEWS
 			| VOLATILE
@@ -18101,6 +18723,7 @@ col_name_keyword:
 			| EXISTS
 			| EXTRACT
 			| FLOAT_P
+			| GRAPH_TABLE
 			| GREATEST
 			| GROUPING
 			| INOUT
@@ -18378,6 +19001,7 @@ bare_label_keyword:
 			| DEPENDS
 			| DEPTH
 			| DESC
+			| DESTINATION
 			| DETACH
 			| DICTIONARY
 			| DISABLE_P
@@ -18389,6 +19013,7 @@ bare_label_keyword:
 			| DOUBLE_P
 			| DROP
 			| EACH
+			| EDGE
 			| ELSE
 			| ENABLE_P
 			| ENCODING
@@ -18423,6 +19048,8 @@ bare_label_keyword:
 			| GENERATED
 			| GLOBAL
 			| GRANTED
+			| GRAPH
+			| GRAPH_TABLE
 			| GREATEST
 			| GROUPING
 			| GROUPS
@@ -18502,6 +19129,7 @@ bare_label_keyword:
 			| NFKC
 			| NFKD
 			| NO
+			| NODE
 			| NONE
 			| NORMALIZE
 			| NORMALIZED
@@ -18553,6 +19181,8 @@ bare_label_keyword:
 			| PROCEDURE
 			| PROCEDURES
 			| PROGRAM
+			| PROPERTIES
+			| PROPERTY
 			| PUBLICATION
 			| QUOTE
 			| RANGE
@@ -18566,6 +19196,7 @@ bare_label_keyword:
 			| REFERENCING
 			| REFRESH
 			| REINDEX
+			| RELATIONSHIP
 			| RELATIVE_P
 			| RELEASE
 			| RENAME
@@ -18611,6 +19242,7 @@ bare_label_keyword:
 			| SMALLINT
 			| SNAPSHOT
 			| SOME
+			| SOURCE
 			| SQL_P
 			| STABLE
 			| STANDALONE_P
@@ -18674,6 +19306,7 @@ bare_label_keyword:
 			| VARIADIC
 			| VERBOSE
 			| VERSION_P
+			| VERTEX
 			| VIEW
 			| VIEWS
 			| VOLATILE
@@ -18712,6 +19345,8 @@ bare_label_keyword:
 			| _YB_TABLETS_P
 			| _YB_UNLOCK_P
 		;
+
+
 
 %%
 
