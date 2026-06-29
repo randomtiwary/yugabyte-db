@@ -868,6 +868,7 @@ static char *recovery_target_lsn_string;
 static char *restrict_nonsystem_relation_kind_string;
 
 bool		yb_enable_memory_tracking = true;
+bool		yb_enable_property_graph_queries = false;
 static char *yb_effective_transaction_isolation_level_string;
 static char *yb_xcluster_consistency_level_string;
 static char *yb_read_time_string;
@@ -2680,6 +2681,17 @@ static struct config_bool ConfigureNamesBool[] =
 		},
 		&yb_enable_replication_commands,
 		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"yb_enable_property_graph_queries", PGC_SUSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable SQL/PGQ property graph queries (CREATE/ALTER/DROP PROPERTY GRAPH and GRAPH_TABLE)."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&yb_enable_property_graph_queries,
+		false,
 		NULL, NULL, NULL
 	},
 
