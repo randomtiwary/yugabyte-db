@@ -121,4 +121,13 @@ extern Oid	attnumTypeId(Relation rd, int attid);
 extern Oid	attnumCollationId(Relation rd, int attid);
 extern bool isQueryUsingTempRelation(Query *query);
 
+extern ParseNamespaceItem *addRangeTableEntryForGraphTable(ParseState *pstate,
+														  Oid graphid,
+														  GraphPattern *graph_pattern,
+														  List *columns,
+														  List *colnames,
+														  Alias *alias,
+														  bool lateral,
+														  bool inFromCl);
+
 #endif							/* PARSE_RELATION_H */

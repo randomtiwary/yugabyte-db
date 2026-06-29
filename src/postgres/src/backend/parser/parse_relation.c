@@ -2933,6 +2933,7 @@ expandRTE(RangeTblEntry *rte, int rtindex, int sublevels_up,
 			}
 			break;
 		case RTE_TABLEFUNC:
+		case RTE_GRAPH_TABLE:
 		case RTE_VALUES:
 		case RTE_CTE:
 		case RTE_NAMEDTUPLESTORE:
@@ -3307,6 +3308,7 @@ get_rte_attribute_is_dropped(RangeTblEntry *rte, AttrNumber attnum)
 			break;
 		case RTE_SUBQUERY:
 		case RTE_TABLEFUNC:
+		case RTE_GRAPH_TABLE:
 		case RTE_VALUES:
 		case RTE_CTE:
 
@@ -3757,3 +3759,96 @@ isQueryUsingTempRelation_walker(Node *node, void *context)
 								  isQueryUsingTempRelation_walker,
 								  context);
 }
+
+/*
+ * Add an entry for a GRAPH_TABLE to the pstate's range table (p_rtable).
+ */
+ParseNamespaceItem *
+addRangeTableEntryForGraphTable(ParseState *pstate,
+								Oid graphid,
+								GraphPattern *graph_pattern,
+								List *columns,
+								List *colnames,
+								Alias *alias,
+								bool lateral,
+								bool inFromCl)
+{
+	RangeTblEntry *rte = makeNode(RangeTblEntry);
+	char	   *refname = alias ? alias->aliasname : pstrdup("graph_table");
+	Alias	   *eref;
+	int			numaliases;
+	int			varattno;
+	ListCell   *lc;
+	List	   *coltypes = NIL;
+	List	   *coltypmods = NIL;
+	List	   *colcollations = NIL;
+
+	Assert(pstate != NULL);
+
+	rte->rtekind = RTE_GRAPH_TABLE;
+	rte->relid = graphid;
+	rte->relkind = RELKIND_PROPGRAPH;
+	rte->graph_pattern = graph_pattern;
+	rte->graph_table_columns = columns;
+	rte->alias = alias;
+	rte->rellockmode = AccessShareLock;
+
+	eref = alias ? copyObject(alias) : makeAlias(refname, NIL);
+
+	if (!eref->colnames)
+		eref->colnames = colnames;
+
+	numaliases = list_length(eref->colnames);
+
+	/* fill in any unspecified alias columns */
+	varattno = 0;
+	foreach(lc, colnames)
+	{
+		varattno++;
+		if (varattno > numaliases)
+			eref->colnames = lappend(eref->colnames, lfirst(lc));
+	}
+	if (varattno < numaliases)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
+				 errmsg("GRAPH_TABLE \"%s\" has %d columns available but %d columns specified",
+						refname, varattno, numaliases)));
+
+	rte->eref = eref;
+
+	foreach(lc, columns)
+	{
+		TargetEntry *te = lfirst_node(TargetEntry, lc);
+		Node	   *colexpr = (Node *) te->expr;
+
+		coltypes = lappend_oid(coltypes, exprType(colexpr));
+		coltypmods = lappend_int(coltypmods, exprTypmod(colexpr));
+		colcollations = lappend_oid(colcollations, exprCollation(colexpr));
+	}
+
+	rte->coltypes = coltypes;
+	rte->coltypmods = coltypmods;
+	rte->colcollations = colcollations;
+
+	/*
+	 * Graph permissions are checked against underlying tables during rewrite
+	 * (security-invoker-like behavior), similar to views.
+	 */
+	rte->lateral = lateral;
+	rte->inh = false;
+	rte->inFromCl = inFromCl;
+
+	rte->requiredPerms = 0;
+	rte->checkAsUser = InvalidOid;
+	rte->selectedCols = NULL;
+	rte->insertedCols = NULL;
+	rte->updatedCols = NULL;
+	rte->extraUpdatedCols = NULL;
+
+	pstate->p_rtable = lappend(pstate->p_rtable, rte);
+
+	return buildNSItemFromLists(rte, list_length(pstate->p_rtable),
+								rte->coltypes, rte->coltypmods,
+								rte->colcollations);
+}
+

@@ -176,6 +176,13 @@ typedef Node *(*CoerceParamHook) (ParseState *pstate, Param *param,
  *
  * p_ref_hook_state: passthrough state for the parser hook functions.
  */
+
+typedef struct GraphTableParseState
+{
+	Oid			graphid;		/* OID of the graph being referenced */
+	List	   *variables;		/* list of element pattern variables in GRAPH_TABLE */
+} GraphTableParseState;
+
 struct ParseState
 {
 	ParseState *parentParseState;	/* stack link */
@@ -213,6 +220,8 @@ struct ParseState
 	bool		p_hasModifyingCTE;
 
 	Node	   *p_last_srf;		/* most recent set-returning func/op found */
+
+	GraphTableParseState *p_graph_table_pstate;	/* Current graph table namespace, if any */
 
 	/*
 	 * Optional hook functions for parser callbacks.  These are null unless
