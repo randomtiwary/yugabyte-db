@@ -48,6 +48,7 @@
 #include "commands/prepare.h"
 #include "commands/proclang.h"
 #include "commands/publicationcmds.h"
+#include "commands/propgraphcmds.h"
 #include "commands/schemacmds.h"
 #include "commands/seclabel.h"
 #include "commands/sequence.h"
@@ -206,6 +207,8 @@ ClassifyUtilityCommandAsReadOnly(Node *parsetree)
 		case T_CreateOpFamilyStmt:
 		case T_CreatePLangStmt:
 		case T_CreatePolicyStmt:
+		case T_CreatePropGraphStmt:
+		case T_AlterPropGraphStmt:
 		case T_CreatePublicationStmt:
 		case T_CreateRangeStmt:
 		case T_CreateRoleStmt:
@@ -2036,7 +2039,9 @@ ProcessUtilitySlow(ParseState *pstate,
 				address = CreateAccessMethod((CreateAmStmt *) parsetree);
 				break;
 
-			case T_CreatePublicationStmt:
+			case T_CreatePropGraphStmt:
+		case T_AlterPropGraphStmt:
+		case T_CreatePublicationStmt:
 				address = CreatePublication(pstate, (CreatePublicationStmt *) parsetree);
 				break;
 
@@ -3294,6 +3299,8 @@ CreateCommandTag(Node *parsetree)
 			tag = CMDTAG_CREATE_ACCESS_METHOD;
 			break;
 
+		case T_CreatePropGraphStmt:
+		case T_AlterPropGraphStmt:
 		case T_CreatePublicationStmt:
 			tag = CMDTAG_CREATE_PUBLICATION;
 			break;
@@ -3923,6 +3930,8 @@ GetCommandLogLevel(Node *parsetree)
 			lev = LOGSTMT_DDL;
 			break;
 
+		case T_CreatePropGraphStmt:
+		case T_AlterPropGraphStmt:
 		case T_CreatePublicationStmt:
 			lev = LOGSTMT_DDL;
 			break;

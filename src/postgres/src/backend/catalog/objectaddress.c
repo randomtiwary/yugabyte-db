@@ -91,6 +91,11 @@
 #include "utils/syscache.h"
 
 /* YB includes */
+#include "catalog/pg_propgraph_element.h"
+#include "catalog/pg_propgraph_element_label.h"
+#include "catalog/pg_propgraph_label.h"
+#include "catalog/pg_propgraph_label_property.h"
+#include "catalog/pg_propgraph_property.h"
 #include "catalog/pg_yb_profile.h"
 #include "catalog/pg_yb_role_profile.h"
 #include "catalog/pg_yb_tablegroup.h"
@@ -599,6 +604,76 @@ static const ObjectPropertyType ObjectProperty[] =
 		true
 	},
 	{
+		"property graph element",
+		PropgraphElementRelationId,
+		PropgraphElementObjectIndexId,
+		PROPGRAPHELOID,
+		PROPGRAPHELALIAS,
+		Anum_pg_propgraph_element_oid,
+		Anum_pg_propgraph_element_pgealias,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		-1,
+		false
+	},
+	{
+		"property graph element label",
+		PropgraphElementLabelRelationId,
+		PropgraphElementLabelObjectIndexId,
+		-1,
+		-1,
+		Anum_pg_propgraph_element_label_oid,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		-1,
+		false
+	},
+	{
+		"property graph label",
+		PropgraphLabelRelationId,
+		PropgraphLabelObjectIndexId,
+		PROPGRAPHLABELOID,
+		PROPGRAPHLABELNAME,
+		Anum_pg_propgraph_label_oid,
+		Anum_pg_propgraph_label_pgllabel,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		-1,
+		false
+	},
+	{
+		"property graph label property",
+		PropgraphLabelPropertyRelationId,
+		PropgraphLabelPropertyObjectIndexId,
+		-1,
+		-1,
+		Anum_pg_propgraph_label_property_oid,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		-1,
+		false
+	},
+	{
+		"property graph property",
+		PropgraphPropertyRelationId,
+		PropgraphPropertyObjectIndexId,
+		PROPGRAPHPROPOID,
+		PROPGRAPHPROPNAME,
+		Anum_pg_propgraph_property_oid,
+		Anum_pg_propgraph_property_pgpname,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		InvalidAttrNumber,
+		-1,
+		false
+	},
+	{
 		"subscription",
 		SubscriptionRelationId,
 		SubscriptionObjectIndexId,
@@ -686,6 +761,9 @@ static const struct object_type_map
 	{
 		"toast table", -1
 	},							/* unmapped */
+	{
+		"property graph", OBJECT_PROPGRAPH
+	},
 	{
 		"view", OBJECT_VIEW
 	},
@@ -1010,6 +1088,7 @@ get_object_address(ObjectType objtype, Node *object,
 			case OBJECT_INDEX:
 			case OBJECT_SEQUENCE:
 			case OBJECT_TABLE:
+			case OBJECT_PROPGRAPH:
 			case OBJECT_VIEW:
 			case OBJECT_MATVIEW:
 			case OBJECT_FOREIGN_TABLE:
@@ -1448,6 +1527,13 @@ get_relation_by_qualified_name(ObjectType objtype, List *object,
 				ereport(ERROR,
 						(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 						 errmsg("\"%s\" is not a table",
+								RelationGetRelationName(relation))));
+			break;
+		case OBJECT_PROPGRAPH:
+			if (relation->rd_rel->relkind != RELKIND_PROPGRAPH)
+				ereport(ERROR,
+						(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+						 errmsg("\"%s\" is not a property graph",
 								RelationGetRelationName(relation))));
 			break;
 		case OBJECT_VIEW:
@@ -6329,6 +6415,8 @@ get_relkind_objtype(char relkind)
 			return OBJECT_SEQUENCE;
 		case RELKIND_VIEW:
 			return OBJECT_VIEW;
+		case RELKIND_PROPGRAPH:
+			return OBJECT_PROPGRAPH;
 		case RELKIND_MATVIEW:
 			return OBJECT_MATVIEW;
 		case RELKIND_FOREIGN_TABLE:
