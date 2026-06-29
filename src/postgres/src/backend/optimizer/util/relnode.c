@@ -366,6 +366,7 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptInfo *parent)
 		case RTE_FUNCTION:
 		case RTE_TABLEFUNC:
 		case RTE_VALUES:
+		case RTE_GRAPH_TABLE:
 		case RTE_CTE:
 		case RTE_NAMEDTUPLESTORE:
 

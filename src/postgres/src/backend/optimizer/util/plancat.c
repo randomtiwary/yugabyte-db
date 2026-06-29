@@ -1926,6 +1926,7 @@ build_physical_tlist(PlannerInfo *root, RelOptInfo *rel)
 		case RTE_FUNCTION:
 		case RTE_TABLEFUNC:
 		case RTE_VALUES:
+		case RTE_GRAPH_TABLE:
 		case RTE_CTE:
 		case RTE_NAMEDTUPLESTORE:
 		case RTE_RESULT:

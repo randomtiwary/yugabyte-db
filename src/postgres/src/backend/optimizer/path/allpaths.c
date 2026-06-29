@@ -524,6 +524,13 @@ set_rel_size(PlannerInfo *root, RelOptInfo *rel,
 			case RTE_VALUES:
 				set_values_size_estimates(root, rel);
 				break;
+			case RTE_GRAPH_TABLE:
+				/*
+				 * Should not happen: GRAPH_TABLE RTEs are replaced by
+				 * subquery RTEs when rewriting queries.
+				 */
+				Assert(false);
+				break;
 			case RTE_CTE:
 
 				/*
@@ -617,6 +624,13 @@ set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
 			case RTE_VALUES:
 				/* Values list */
 				set_values_pathlist(root, rel, rte);
+				break;
+			case RTE_GRAPH_TABLE:
+				/*
+				 * Should not happen: GRAPH_TABLE RTEs are replaced by
+				 * subquery RTEs when rewriting queries.
+				 */
+				Assert(false);
 				break;
 			case RTE_CTE:
 				/* CTE reference --- fully handled during set_rel_size */
@@ -827,6 +841,13 @@ set_rel_consider_parallel(PlannerInfo *root, RelOptInfo *rel,
 			/* Check for parallel-restricted functions. */
 			if (!is_parallel_safe(root, (Node *) rte->values_lists))
 				return;
+			break;
+		case RTE_GRAPH_TABLE:
+			/*
+			 * Should not happen: GRAPH_TABLE RTEs are replaced by
+			 * subquery RTEs when rewriting queries.
+			 */
+			Assert(false);
 			break;
 
 		case RTE_CTE:

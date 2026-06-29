@@ -72,6 +72,8 @@ yb_reject_distinct_pushdown_walker(Node *node)
 		case T_ArrayCoerceExpr:
 		case T_Query:
 		case T_PlaceHolderVar:
+		case T_GraphLabelRef:
+		case T_GraphPropertyRef:
 			return true;
 		default:
 			break;

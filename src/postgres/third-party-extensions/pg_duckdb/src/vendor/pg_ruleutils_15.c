@@ -7888,6 +7888,7 @@ get_name_for_var_field(Var *var, int fieldno,
 	{
 		case RTE_RELATION:
 		case RTE_VALUES:
+		case RTE_GRAPH_TABLE:
 		case RTE_NAMEDTUPLESTORE:
 		case RTE_RESULT:
 
@@ -11305,6 +11306,14 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 				appendStringInfoChar(buf, '(');
 				get_values_def(rte->values_lists, context);
 				appendStringInfoChar(buf, ')');
+				break;
+			case RTE_GRAPH_TABLE:
+				/*
+				 * Should not reach here: GRAPH_TABLE RTEs are rewritten to
+				 * subqueries before deparsing plans.  Deparse support is in a
+				 * later PR when rewrite is present.
+				 */
+				elog(ERROR, "unexpected GRAPH_TABLE RTE in deparse");
 				break;
 			case RTE_CTE:
 				appendStringInfoString(buf, quote_identifier(rte->ctename));

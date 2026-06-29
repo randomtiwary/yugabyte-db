@@ -7298,7 +7298,6 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 			| DROP object_type_any_name any_name_list opt_drop_behavior
 				{
 					DropStmt *n = makeNode(DropStmt);
-			| PROPERTY GRAPH						{ $$ = OBJECT_PROPGRAPH; }
 
 					n->removeType = $2;
 					n->missing_ok = false;
@@ -15631,11 +15630,10 @@ opt_is_label_expression:
  */
 
 opt_graph_pattern_quantifier:
-			'{' Iconst '}'					{ $$ = list_make2_int($2, $2); }
-			| '{' ',' Iconst '}'			{ $$ = list_make2_int(0, $3); }
-			| '{' Iconst ',' Iconst '}'		{ $$ = list_make2_int($2, $4); }
-			| /*EMPTY*/						{ $$ = NULL; }
+			/* Variable-length path quantifiers not supported yet (same as PG19). */
+			/*EMPTY*/								{ $$ = NULL; }
 		;
+
 
 /*
  * label expression

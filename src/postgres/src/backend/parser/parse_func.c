@@ -2656,6 +2656,7 @@ check_srf_call_placement(ParseState *pstate, Node *last_srf, int location)
 			err = _("set-returning functions are not allowed in column generation expressions");
 			break;
 		case EXPR_KIND_CYCLE_MARK:
+		case EXPR_KIND_PROPGRAPH_PROPERTY:
 			errkind = true;
 			break;
 

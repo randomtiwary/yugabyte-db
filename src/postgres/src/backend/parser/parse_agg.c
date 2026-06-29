@@ -569,6 +569,7 @@ check_agglevels_and_constraints(ParseState *pstate, Node *expr)
 			break;
 
 		case EXPR_KIND_CYCLE_MARK:
+		case EXPR_KIND_PROPGRAPH_PROPERTY:
 			errkind = true;
 			break;
 
@@ -959,6 +960,7 @@ transformWindowFuncCall(ParseState *pstate, WindowFunc *wfunc,
 			err = _("window functions are not allowed in column generation expressions");
 			break;
 		case EXPR_KIND_CYCLE_MARK:
+		case EXPR_KIND_PROPGRAPH_PROPERTY:
 			errkind = true;
 			break;
 

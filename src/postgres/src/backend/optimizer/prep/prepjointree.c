@@ -1204,6 +1204,7 @@ pull_up_simple_subquery(PlannerInfo *root, Node *jtnode, RangeTblEntry *rte,
 				case RTE_SUBQUERY:
 				case RTE_FUNCTION:
 				case RTE_VALUES:
+				case RTE_GRAPH_TABLE:
 				case RTE_TABLEFUNC:
 					child_rte->lateral = true;
 					break;
@@ -2285,6 +2286,10 @@ replace_vars_in_jointree(Node *jtnode,
 						rte->values_lists = (List *)
 							pullup_replace_vars((Node *) rte->values_lists,
 												context);
+						break;
+					case RTE_GRAPH_TABLE:
+						/* Should not happen after rewrite replaces GRAPH_TABLE RTEs. */
+						Assert(false);
 						break;
 					case RTE_JOIN:
 					case RTE_CTE:

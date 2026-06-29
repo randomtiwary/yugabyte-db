@@ -486,6 +486,11 @@ rewriteRuleAction(Query *parsetree,
 					sub_action->hasSubLinks =
 						checkExprHasSubLink((Node *) rte->values_lists);
 					break;
+				case RTE_GRAPH_TABLE:
+					sub_action->hasSubLinks =
+						checkExprHasSubLink((Node *) rte->graph_pattern) ||
+						checkExprHasSubLink((Node *) rte->graph_table_columns);
+					break;
 				default:
 					/* other RTE types don't contain bare expressions */
 					break;

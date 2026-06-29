@@ -1021,6 +1021,7 @@ EventTriggerSupportsObjectType(ObjectType obtype)
 		case OBJECT_TYPE:
 		case OBJECT_USER_MAPPING:
 		case OBJECT_VIEW:
+		case OBJECT_PROPGRAPH:
 			return true;
 
 			/* YB cases */
@@ -2142,6 +2143,7 @@ stringify_grant_objtype(ObjectType objtype)
 		case OBJECT_TSTEMPLATE:
 		case OBJECT_USER_MAPPING:
 		case OBJECT_VIEW:
+		case OBJECT_PROPGRAPH:
 			elog(ERROR, "unsupported object type: %d", (int) objtype);
 
 			/* YB cases */
@@ -2232,6 +2234,7 @@ stringify_adefprivs_objtype(ObjectType objtype)
 		case OBJECT_TSTEMPLATE:
 		case OBJECT_USER_MAPPING:
 		case OBJECT_VIEW:
+		case OBJECT_PROPGRAPH:
 			elog(ERROR, "unsupported object type: %d", (int) objtype);
 
 			/* YB cases */

@@ -2398,11 +2398,11 @@ expression_tree_walker(Node *node,
 			{
 				GraphElementPattern *gep = (GraphElementPattern *) node;
 
-				if (WALK(gep->labelexpr))
+				if (walker(gep->labelexpr, context))
 					return true;
-				if (WALK(gep->subexpr))
+				if (walker(gep->subexpr, context))
 					return true;
-				if (WALK(gep->whereClause))
+				if (walker(gep->whereClause, context))
 					return true;
 			}
 			break;
@@ -2410,9 +2410,9 @@ expression_tree_walker(Node *node,
 			{
 				GraphPattern *gp = (GraphPattern *) node;
 
-				if (LIST_WALK(gp->path_pattern_list))
+				if (walker(gp->path_pattern_list, context))
 					return true;
-				if (WALK(gp->whereClause))
+				if (walker(gp->whereClause, context))
 					return true;
 			}
 			break;
@@ -2607,9 +2607,9 @@ range_table_entry_walker(RangeTblEntry *rte,
 				return true;
 			break;
 		case RTE_GRAPH_TABLE:
-			if (WALK(rte->graph_pattern))
+			if (walker(rte->graph_pattern, context))
 				return true;
-			if (WALK(rte->graph_table_columns))
+			if (walker(rte->graph_table_columns, context))
 				return true;
 			break;
 		case RTE_CTE:
@@ -4191,11 +4191,11 @@ raw_expression_tree_walker(Node *node,
 			{
 				GraphElementPattern *gep = (GraphElementPattern *) node;
 
-				if (WALK(gep->labelexpr))
+				if (walker(gep->labelexpr, context))
 					return true;
-				if (WALK(gep->subexpr))
+				if (walker(gep->subexpr, context))
 					return true;
-				if (WALK(gep->whereClause))
+				if (walker(gep->whereClause, context))
 					return true;
 			}
 			break;
@@ -4203,9 +4203,9 @@ raw_expression_tree_walker(Node *node,
 			{
 				GraphPattern *gp = (GraphPattern *) node;
 
-				if (WALK(gp->path_pattern_list))
+				if (walker(gp->path_pattern_list, context))
 					return true;
-				if (WALK(gp->whereClause))
+				if (walker(gp->whereClause, context))
 					return true;
 			}
 			break;

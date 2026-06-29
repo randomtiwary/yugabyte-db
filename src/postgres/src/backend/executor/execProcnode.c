@@ -1090,6 +1090,17 @@ YbGetExecNodeSpanName(PlanState *node)
 		case T_YbMergeScanInfo:
 		case T_YbMergeScanSaopColInfo:
 		case T_YbSortInfo:
+		case T_GraphLabelRef:
+		case T_GraphPropertyRef:
+		case T_CreatePropGraphStmt:
+		case T_AlterPropGraphStmt:
+		case T_RangeGraphTable:
+		case T_GraphPattern:
+		case T_GraphElementPattern:
+		case T_PropGraphVertex:
+		case T_PropGraphEdge:
+		case T_PropGraphLabelAndProperties:
+		case T_PropGraphProperties:
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("unrecognized node type: %d", (int) nodeTag(node))));

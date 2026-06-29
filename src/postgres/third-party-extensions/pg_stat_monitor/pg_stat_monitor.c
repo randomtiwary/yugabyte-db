@@ -2718,6 +2718,11 @@ JumbleRangeTable(JumbleState *jstate, List *rtable, CmdType cmd_type)
 			case RTE_VALUES:
 				JumbleExpr(jstate, (Node *) rte->values_lists);
 				break;
+			case RTE_GRAPH_TABLE:
+				/* GRAPH_TABLE uses graph_pattern / columns, not values_lists */
+				JumbleExpr(jstate, (Node *) rte->graph_pattern);
+				JumbleExpr(jstate, (Node *) rte->graph_table_columns);
+				break;
 			case RTE_CTE:
 
 				/*

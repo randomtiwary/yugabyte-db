@@ -4016,6 +4016,9 @@ aclcheck_error(AclResult aclerr, ObjectType objtype,
 					case OBJECT_VIEW:
 						msg = gettext_noop("permission denied for view %s");
 						break;
+					case OBJECT_PROPGRAPH:
+						msg = gettext_noop("permission denied for property graph %s");
+						break;
 						/* these currently aren't used */
 					case OBJECT_ACCESS_METHOD:
 					case OBJECT_AMOP:
@@ -4126,6 +4129,9 @@ aclcheck_error(AclResult aclerr, ObjectType objtype,
 						break;
 					case OBJECT_VIEW:
 						msg = gettext_noop("must be owner of view %s");
+						break;
+					case OBJECT_PROPGRAPH:
+						msg = gettext_noop("must be owner of property graph %s");
 						break;
 					case OBJECT_SCHEMA:
 						msg = gettext_noop("must be owner of schema %s");

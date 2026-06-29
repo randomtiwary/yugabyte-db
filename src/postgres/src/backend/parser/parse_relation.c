@@ -2934,6 +2934,7 @@ expandRTE(RangeTblEntry *rte, int rtindex, int sublevels_up,
 			break;
 		case RTE_TABLEFUNC:
 		case RTE_VALUES:
+		case RTE_GRAPH_TABLE:
 		case RTE_CTE:
 		case RTE_NAMEDTUPLESTORE:
 			{
@@ -3308,6 +3309,7 @@ get_rte_attribute_is_dropped(RangeTblEntry *rte, AttrNumber attnum)
 		case RTE_SUBQUERY:
 		case RTE_TABLEFUNC:
 		case RTE_VALUES:
+		case RTE_GRAPH_TABLE:
 		case RTE_CTE:
 
 			/*

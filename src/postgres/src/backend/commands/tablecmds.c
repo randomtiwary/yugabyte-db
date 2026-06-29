@@ -1696,6 +1696,10 @@ RemoveRelations(DropStmt *drop)
 			relkind = RELKIND_VIEW;
 			break;
 
+		case OBJECT_PROPGRAPH:
+			relkind = RELKIND_PROPGRAPH;
+			break;
+
 		case OBJECT_MATVIEW:
 			relkind = RELKIND_MATVIEW;
 			break;
