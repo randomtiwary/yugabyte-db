@@ -208,4 +208,7 @@ extern float4 yb_get_attdistinctcount(Oid relid, AttrNumber attnum);
 
 #define TypeIsToastable(typid)	(get_typstorage(typid) != TYPSTORAGE_PLAIN)
 
+extern char *get_propgraph_label_name(Oid labeloid);
+extern char *get_propgraph_property_name(Oid propoid);
+
 #endif							/* LSYSCACHE_H */

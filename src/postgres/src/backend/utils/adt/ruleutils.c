@@ -35,6 +35,11 @@
 #include "catalog/pg_operator.h"
 #include "catalog/pg_partitioned_table.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_propgraph_element.h"
+#include "catalog/pg_propgraph_element_label.h"
+#include "catalog/pg_propgraph_label.h"
+#include "catalog/pg_propgraph_label_property.h"
+#include "catalog/pg_propgraph_property.h"
 #include "catalog/pg_statistic_ext.h"
 #include "catalog/pg_trigger.h"
 #include "catalog/pg_type.h"
@@ -461,6 +466,9 @@ static bool isSimpleNode(Node *node, Node *parentNode, int prettyFlags);
 static void appendContextKeyword(deparse_context *context, const char *str,
 								 int indentBefore, int indentAfter, int indentPlus);
 static void removeStringInfoSpaces(StringInfo str);
+static void make_propgraphdef_elements(StringInfo buf, Oid pgrelid, char pgekind);
+static void make_propgraphdef_labels(StringInfo buf, Oid elid, const char *elalias, Oid elrelid);
+static void make_propgraphdef_properties(StringInfo buf, Oid ellabelid, Oid elrelid);
 static void get_rule_expr(Node *node, deparse_context *context,
 						  bool showimplicit);
 static void get_rule_expr_toplevel(Node *node, deparse_context *context,
@@ -13127,4 +13135,322 @@ yb_decompile_pk_column_index_array(Datum column_index_array, Oid relId,
 		appendStringInfoString(buf, ") HASH");
 	relation_close(indexrel, NoLock);
 	return nKeys;
+}
+
+
+ */
+Datum
+pg_get_propgraphdef(PG_FUNCTION_ARGS)
+{
+	Oid			pgrelid = PG_GETARG_OID(0);
+	StringInfoData buf;
+	HeapTuple	classtup;
+	Form_pg_class classform;
+	char	   *name;
+	char	   *nsp;
+
+	initStringInfo(&buf);
+
+	classtup = SearchSysCache1(RELOID, ObjectIdGetDatum(pgrelid));
+	if (!HeapTupleIsValid(classtup))
+		PG_RETURN_NULL();
+
+	classform = (Form_pg_class) GETSTRUCT(classtup);
+	name = NameStr(classform->relname);
+
+	if (classform->relkind != RELKIND_PROPGRAPH)
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("\"%s\" is not a property graph", name)));
+
+	nsp = get_namespace_name(classform->relnamespace);
+
+	appendStringInfo(&buf, "CREATE PROPERTY GRAPH %s",
+					 quote_qualified_identifier(nsp, name));
+
+	ReleaseSysCache(classtup);
+
+	make_propgraphdef_elements(&buf, pgrelid, PGEKIND_VERTEX);
+	make_propgraphdef_elements(&buf, pgrelid, PGEKIND_EDGE);
+
+	PG_RETURN_TEXT_P(string_to_text(buf.data));
+}
+
+/*
+ * Generates a VERTEX TABLES (...) or EDGE TABLES (...) clause.  Pass in the
+ * property graph relation OID and the element kind (vertex or edge).  Result
+ * is appended to buf.
+ */
+static void
+make_propgraphdef_elements(StringInfo buf, Oid pgrelid, char pgekind)
+{
+	Relation	pgerel;
+	ScanKeyData scankey[1];
+	SysScanDesc scan;
+	bool		first;
+	HeapTuple	tup;
+
+	pgerel = table_open(PropgraphElementRelationId, AccessShareLock);
+
+	ScanKeyInit(&scankey[0],
+				Anum_pg_propgraph_element_pgepgid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(pgrelid));
+
+	scan = systable_beginscan(pgerel, PropgraphElementAliasIndexId, true, NULL, 1, scankey);
+
+	first = true;
+	while ((tup = systable_getnext(scan)))
+	{
+		Form_pg_propgraph_element pgeform = (Form_pg_propgraph_element) GETSTRUCT(tup);
+		char	   *relname;
+		Datum		datum;
+		bool		isnull;
+
+		if (pgeform->pgekind != pgekind)
+			continue;
+
+		if (first)
+		{
+			appendStringInfo(buf, "\n    %s TABLES (\n", pgekind == PGEKIND_VERTEX ? "VERTEX" : "EDGE");
+			first = false;
+		}
+		else
+			appendStringInfo(buf, ",\n");
+
+		relname = get_rel_name(pgeform->pgerelid);
+		if (relname && strcmp(relname, NameStr(pgeform->pgealias)) == 0)
+			appendStringInfo(buf, "        %s",
+							 generate_relation_name(pgeform->pgerelid, NIL));
+		else
+			appendStringInfo(buf, "        %s AS %s",
+							 generate_relation_name(pgeform->pgerelid, NIL),
+							 quote_identifier(NameStr(pgeform->pgealias)));
+
+		datum = heap_getattr(tup, Anum_pg_propgraph_element_pgekey, RelationGetDescr(pgerel), &isnull);
+		if (!isnull)
+		{
+			appendStringInfoString(buf, " KEY (");
+			decompile_column_index_array(datum, pgeform->pgerelid, false, buf);
+			appendStringInfoString(buf, ")");
+		}
+		else
+			elog(ERROR, "null pgekey for element %u", pgeform->oid);
+
+		if (pgekind == PGEKIND_EDGE)
+		{
+			Datum		srckey;
+			Datum		srcref;
+			Datum		destkey;
+			Datum		destref;
+			HeapTuple	tup2;
+			Form_pg_propgraph_element pgeform2;
+
+			datum = heap_getattr(tup, Anum_pg_propgraph_element_pgesrckey, RelationGetDescr(pgerel), &isnull);
+			srckey = isnull ? 0 : datum;
+			datum = heap_getattr(tup, Anum_pg_propgraph_element_pgesrcref, RelationGetDescr(pgerel), &isnull);
+			srcref = isnull ? 0 : datum;
+			datum = heap_getattr(tup, Anum_pg_propgraph_element_pgedestkey, RelationGetDescr(pgerel), &isnull);
+			destkey = isnull ? 0 : datum;
+			datum = heap_getattr(tup, Anum_pg_propgraph_element_pgedestref, RelationGetDescr(pgerel), &isnull);
+			destref = isnull ? 0 : datum;
+
+			appendStringInfoString(buf, " SOURCE");
+			tup2 = SearchSysCache1(PROPGRAPHELOID, ObjectIdGetDatum(pgeform->pgesrcvertexid));
+			if (!tup2)
+				elog(ERROR, "cache lookup failed for property graph element %u", pgeform->pgesrcvertexid);
+			pgeform2 = (Form_pg_propgraph_element) GETSTRUCT(tup2);
+			if (srckey)
+			{
+				appendStringInfoString(buf, " KEY (");
+				decompile_column_index_array(srckey, pgeform->pgerelid, false, buf);
+				appendStringInfo(buf, ") REFERENCES %s (", quote_identifier(NameStr(pgeform2->pgealias)));
+				decompile_column_index_array(srcref, pgeform2->pgerelid, false, buf);
+				appendStringInfoString(buf, ")");
+			}
+			else
+				appendStringInfo(buf, " %s ", quote_identifier(NameStr(pgeform2->pgealias)));
+			ReleaseSysCache(tup2);
+
+			appendStringInfoString(buf, " DESTINATION");
+			tup2 = SearchSysCache1(PROPGRAPHELOID, ObjectIdGetDatum(pgeform->pgedestvertexid));
+			if (!tup2)
+				elog(ERROR, "cache lookup failed for property graph element %u", pgeform->pgedestvertexid);
+			pgeform2 = (Form_pg_propgraph_element) GETSTRUCT(tup2);
+			if (destkey)
+			{
+				appendStringInfoString(buf, " KEY (");
+				decompile_column_index_array(destkey, pgeform->pgerelid, false, buf);
+				appendStringInfo(buf, ") REFERENCES %s (", quote_identifier(NameStr(pgeform2->pgealias)));
+				decompile_column_index_array(destref, pgeform2->pgerelid, false, buf);
+				appendStringInfoString(buf, ")");
+			}
+			else
+				appendStringInfo(buf, " %s", quote_identifier(NameStr(pgeform2->pgealias)));
+			ReleaseSysCache(tup2);
+		}
+
+		make_propgraphdef_labels(buf, pgeform->oid, NameStr(pgeform->pgealias), pgeform->pgerelid);
+	}
+	if (!first)
+		appendStringInfo(buf, "\n    )");
+
+	systable_endscan(scan);
+	table_close(pgerel, AccessShareLock);
+}
+
+/*
+ * Generates label and properties list.  Pass in the element OID, the element
+ * alias, and the graph relation OID.  Result is appended to buf.
+ */
+static void
+make_propgraphdef_labels(StringInfo buf, Oid elid, const char *elalias, Oid elrelid)
+{
+	Relation	pglrel;
+	ScanKeyData scankey[1];
+	SysScanDesc scan;
+	int			count;
+	HeapTuple	tup;
+
+	pglrel = table_open(PropgraphElementLabelRelationId, AccessShareLock);
+
+	ScanKeyInit(&scankey[0],
+				Anum_pg_propgraph_element_label_pgelelid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(elid));
+
+	count = 0;
+	scan = systable_beginscan(pglrel, PropgraphElementLabelElementLabelIndexId, true, NULL, 1, scankey);
+	while ((tup = systable_getnext(scan)))
+	{
+		count++;
+	}
+	systable_endscan(scan);
+
+	scan = systable_beginscan(pglrel, PropgraphElementLabelElementLabelIndexId, true, NULL, 1, scankey);
+
+	while ((tup = systable_getnext(scan)))
+	{
+		Form_pg_propgraph_element_label pgelform = (Form_pg_propgraph_element_label) GETSTRUCT(tup);
+		const char *labelname;
+
+		labelname = get_propgraph_label_name(pgelform->pgellabelid);
+
+		if (strcmp(labelname, elalias) == 0)
+		{
+			/* If the default label is the only label, don't print anything. */
+			if (count != 1)
+				appendStringInfo(buf, " DEFAULT LABEL");
+		}
+		else
+			appendStringInfo(buf, " LABEL %s", quote_identifier(labelname));
+
+		make_propgraphdef_properties(buf, pgelform->oid, elrelid);
+	}
+
+	systable_endscan(scan);
+
+	table_close(pglrel, AccessShareLock);
+}
+
+/*
+ * Helper function for make_propgraphdef_properties(): Sort (propname, expr)
+ * pairs by name.
+ */
+static int
+propdata_by_name_cmp(const ListCell *a, const ListCell *b)
+{
+	List	   *la = lfirst_node(List, a);
+	List	   *lb = lfirst_node(List, b);
+	char	   *pna = strVal(linitial(la));
+	char	   *pnb = strVal(linitial(lb));
+
+	return strcmp(pna, pnb);
+}
+
+/*
+ * Generates element table properties clause (PROPERTIES (...) or NO
+ * PROPERTIES).  Pass in label OID and element table OID.  Result is appended
+ * to buf.
+ */
+static void
+make_propgraphdef_properties(StringInfo buf, Oid ellabelid, Oid elrelid)
+{
+	Relation	plprel;
+	ScanKeyData scankey[1];
+	SysScanDesc scan;
+	HeapTuple	tup;
+	List	   *outlist = NIL;
+
+	plprel = table_open(PropgraphLabelPropertyRelationId, AccessShareLock);
+
+	ScanKeyInit(&scankey[0],
+				Anum_pg_propgraph_label_property_plpellabelid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(ellabelid));
+
+	/*
+	 * We want to output the properties in a deterministic order.  So we first
+	 * read all the data, then sort, then print it.
+	 */
+	scan = systable_beginscan(plprel, PropgraphLabelPropertyLabelPropIndexId, true, NULL, 1, scankey);
+
+	while ((tup = systable_getnext(scan)))
+	{
+		Form_pg_propgraph_label_property plpform = (Form_pg_propgraph_label_property) GETSTRUCT(tup);
+		Datum		exprDatum;
+		bool		isnull;
+		char	   *tmp;
+		Node	   *expr;
+		char	   *propname;
+
+		exprDatum = heap_getattr(tup, Anum_pg_propgraph_label_property_plpexpr, RelationGetDescr(plprel), &isnull);
+		Assert(!isnull);
+		tmp = TextDatumGetCString(exprDatum);
+		expr = stringToNode(tmp);
+		pfree(tmp);
+
+		propname = get_propgraph_property_name(plpform->plppropid);
+
+		outlist = lappend(outlist, list_make2(makeString(propname), expr));
+	}
+
+	systable_endscan(scan);
+	table_close(plprel, AccessShareLock);
+
+	list_sort(outlist, propdata_by_name_cmp);
+
+	if (outlist)
+	{
+		List	   *context;
+		ListCell   *lc;
+		bool		first = true;
+
+		context = deparse_context_for(get_relation_name(elrelid), elrelid);
+
+		appendStringInfo(buf, " PROPERTIES (");
+
+		foreach(lc, outlist)
+		{
+			List	   *data = lfirst_node(List, lc);
+			char	   *propname = strVal(linitial(data));
+			Node	   *expr = lsecond(data);
+
+			if (first)
+				first = false;
+			else
+				appendStringInfo(buf, ", ");
+
+			if (IsA(expr, Var) && strcmp(propname, get_attname(elrelid, castNode(Var, expr)->varattno, false)) == 0)
+				appendStringInfo(buf, "%s", quote_identifier(propname));
+			else
+				appendStringInfo(buf, "%s AS %s",
+								 deparse_expression_pretty(expr, context, false, false, 0, 0),
+								 quote_identifier(propname));
+		}
+
+		appendStringInfo(buf, ")");
+	}
+	else
+		appendStringInfo(buf, " NO PROPERTIES");
 }
