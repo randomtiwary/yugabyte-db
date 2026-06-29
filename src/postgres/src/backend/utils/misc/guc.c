@@ -4074,6 +4074,18 @@ static struct config_bool ConfigureNamesBool[] =
 	},
 
 	{
+		{"yb_enable_sql_pgq", PGC_SUSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enables SQL/PGQ property graph queries (CREATE PROPERTY GRAPH, GRAPH_TABLE)."),
+			gettext_noop("This is an experimental feature ported from PostgreSQL 19. "
+						   "It remains disabled by default until the implementation is complete. "
+						   "Also settable via --ysql_yb_enable_sql_pgq.")
+		},
+		&yb_enable_sql_pgq,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"yb_pg_stat_plans_track_catalog_queries", PGC_SUSET, STATS_MONITORING,
 			gettext_noop("When set, QPM tracks plans for queries referencing catalog tables."),
 			NULL,

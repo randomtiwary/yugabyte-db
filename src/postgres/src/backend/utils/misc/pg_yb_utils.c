@@ -2420,6 +2420,18 @@ bool		yb_enable_pg_stat_statements_docdb_metrics = true;
 
 bool		yb_enable_global_views = false;
 
+bool		yb_enable_sql_pgq = false;
+
+void
+YbCheckSqlPgqEnabled(void)
+{
+	if (!yb_enable_sql_pgq)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("SQL/PGQ property graph queries are not enabled"),
+				 errhint("Set yb_enable_sql_pgq to on (or start the server with --ysql_yb_enable_sql_pgq=true) to enable this experimental feature.")));
+}
+
 bool
 yb_is_federated_yb_foreign_table(Oid relid)
 {

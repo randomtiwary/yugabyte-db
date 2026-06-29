@@ -1000,6 +1000,16 @@ extern bool yb_enable_pg_stat_statements_rpc_stats;
 extern bool yb_enable_global_views;
 
 /*
+ * If true, enable SQL/PGQ property graph queries (CREATE/ALTER/DROP PROPERTY
+ * GRAPH and GRAPH_TABLE). Disabled by default until the implementation is
+ * complete and validated. Also controlled by gflag ysql_yb_enable_sql_pgq.
+ */
+extern bool yb_enable_sql_pgq;
+
+/* Raise an error if SQL/PGQ is not enabled. */
+extern void YbCheckSqlPgqEnabled(void);
+
+/*
  * If true, enable DocDB metrics collection for pg_stat_statements.
  */
 extern bool yb_enable_pg_stat_statements_docdb_metrics;
