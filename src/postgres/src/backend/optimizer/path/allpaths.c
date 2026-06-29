@@ -850,6 +850,14 @@ set_rel_consider_parallel(PlannerInfo *root, RelOptInfo *rel,
 			Assert(false);
 			break;
 
+		case RTE_GRAPH_TABLE:
+			/*
+			 * Shouldn't happen since these are replaced by subquery RTEs when
+			 * rewriting queries.
+			 */
+			Assert(false);
+			return;
+
 		case RTE_CTE:
 
 			/*

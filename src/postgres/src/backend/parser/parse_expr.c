@@ -28,6 +28,7 @@
 #include "parser/parse_collate.h"
 #include "parser/parse_expr.h"
 #include "parser/parse_func.h"
+#include "parser/parse_graphtable.h"
 #include "parser/parse_oper.h"
 #include "parser/parse_relation.h"
 #include "parser/parse_target.h"
@@ -762,6 +763,10 @@ transformColumnRef(ParseState *pstate, ColumnRef *cref)
 			crerr = CRERR_TOO_MANY; /* too many dotted names */
 			break;
 	}
+
+	/* Try it as a graph table property reference. */
+	if (node == NULL)
+		node = transformGraphTablePropertyRef(pstate, cref);
 
 	/*
 	 * Now give the PostParseColumnRefHook, if any, a chance.  We pass the
@@ -1729,7 +1734,6 @@ transformSubLink(ParseState *pstate, SubLink *sublink)
 		case EXPR_KIND_VALUES:
 		case EXPR_KIND_VALUES_SINGLE:
 		case EXPR_KIND_CYCLE_MARK:
-		case EXPR_KIND_PROPGRAPH_PROPERTY:
 			/* okay */
 			break;
 		case EXPR_KIND_CHECK_CONSTRAINT:
@@ -1772,6 +1776,9 @@ transformSubLink(ParseState *pstate, SubLink *sublink)
 			break;
 		case EXPR_KIND_GENERATED_COLUMN:
 			err = _("cannot use subquery in column generation expression");
+			break;
+		case EXPR_KIND_PROPGRAPH_PROPERTY:
+			err = _("cannot use subquery in property definition expression");
 			break;
 
 			/*
@@ -3103,8 +3110,9 @@ ParseExprKindName(ParseExprKind exprKind)
 		case EXPR_KIND_GENERATED_COLUMN:
 			return "GENERATED AS";
 		case EXPR_KIND_CYCLE_MARK:
-		case EXPR_KIND_PROPGRAPH_PROPERTY:
 			return "CYCLE";
+		case EXPR_KIND_PROPGRAPH_PROPERTY:
+			return "property definition expression";
 
 			/*
 			 * There is intentionally no default: case here, so that the

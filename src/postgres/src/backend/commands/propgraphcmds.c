@@ -494,6 +494,7 @@ propgraph_edge_get_ref_keys(ParseState *pstate, const List *keycols, const List 
 		foreach(lc_fk, RelationGetFKeyList(edge_rel))
 		{
 			ForeignKeyCacheInfo *tmp = lfirst_node(ForeignKeyCacheInfo, lc_fk);
+
 			if (tmp->confrelid == RelationGetRelid(ref_rel))
 			{
 				if (fk)
@@ -1605,6 +1606,7 @@ AlterPropGraph(ParseState *pstate, const AlterPropGraphStmt *stmt)
 
 	if (stmt->drop_properties)
 	{
+		ListCell   *lc;
 		Oid			peoid;
 		Oid			labeloid;
 		Oid			ellabeloid;

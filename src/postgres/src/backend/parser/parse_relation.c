@@ -2097,6 +2097,99 @@ addRangeTableEntryForTableFunc(ParseState *pstate,
 								rte->colcollations);
 }
 
+ParseNamespaceItem *
+addRangeTableEntryForGraphTable(ParseState *pstate,
+								Oid graphid,
+								GraphPattern *graph_pattern,
+								List *columns,
+								List *colnames,
+								Alias *alias,
+								bool lateral,
+								bool inFromCl)
+{
+	RangeTblEntry *rte = makeNode(RangeTblEntry);
+	char	   *refname = alias ? alias->aliasname : pstrdup("graph_table");
+	Alias	   *eref;
+	int			numaliases;
+	int			varattno;
+	ListCell   *lc;
+	List	   *coltypes = NIL;
+	List	   *coltypmods = NIL;
+	List	   *colcollations = NIL;
+	ParseNamespaceItem *nsitem;
+
+	Assert(pstate != NULL);
+
+	rte->rtekind = RTE_GRAPH_TABLE;
+	rte->relid = graphid;
+	rte->relkind = RELKIND_PROPGRAPH;
+	rte->graph_pattern = graph_pattern;
+	rte->graph_table_columns = columns;
+	rte->alias = alias;
+	rte->rellockmode = AccessShareLock;
+
+	eref = alias ? copyObject(alias) : makeAlias(refname, NIL);
+
+	if (!eref->colnames)
+		eref->colnames = colnames;
+
+	numaliases = list_length(eref->colnames);
+
+	/* fill in any unspecified alias columns */
+	varattno = 0;
+	foreach(lc, colnames)
+	{
+		varattno++;
+		if (varattno > numaliases)
+			eref->colnames = lappend(eref->colnames, lfirst(lc));
+	}
+	if (varattno < numaliases)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
+				 errmsg("GRAPH_TABLE \"%s\" has %d columns available but %d columns specified",
+						refname, varattno, numaliases)));
+
+	rte->eref = eref;
+
+	foreach(lc, columns)
+	{
+		TargetEntry *te = lfirst_node(TargetEntry, lc);
+		Node	   *colexpr = (Node *) te->expr;
+
+		coltypes = lappend_oid(coltypes, exprType(colexpr));
+		coltypmods = lappend_int(coltypmods, exprTypmod(colexpr));
+		colcollations = lappend_oid(colcollations, exprCollation(colexpr));
+	}
+
+	/*
+	 * Set flags and access permissions (PG15-style on the RTE).
+	 */
+	rte->lateral = lateral;
+	rte->inFromCl = inFromCl;
+	rte->requiredPerms = ACL_SELECT;
+	rte->checkAsUser = InvalidOid;
+	rte->selectedCols = NULL;
+	rte->insertedCols = NULL;
+	rte->updatedCols = NULL;
+	rte->extraUpdatedCols = NULL;
+
+	/*
+	 * Add completed RTE to pstate's range table list, so that we know its
+	 * index.  But we don't add it to the join list --- caller must do that if
+	 * appropriate.
+	 */
+	pstate->p_rtable = lappend(pstate->p_rtable, rte);
+
+	/*
+	 * Build a ParseNamespaceItem, but don't add it to the pstate's namespace
+	 * list --- caller must do that if appropriate.
+	 */
+	nsitem = buildNSItemFromLists(rte, list_length(pstate->p_rtable),
+								  coltypes, coltypmods, colcollations);
+
+	return nsitem;
+}
+
 /*
  * Add an entry for a VALUES list to the pstate's range table (p_rtable).
  * Then, construct and return a ParseNamespaceItem for the new RTE.
@@ -2934,11 +3027,11 @@ expandRTE(RangeTblEntry *rte, int rtindex, int sublevels_up,
 			break;
 		case RTE_TABLEFUNC:
 		case RTE_VALUES:
-		case RTE_GRAPH_TABLE:
 		case RTE_CTE:
 		case RTE_NAMEDTUPLESTORE:
+		case RTE_GRAPH_TABLE:
 			{
-				/* Tablefunc, Values, CTE, or ENR RTE */
+				/* Tablefunc, Values, CTE, ENR, or GRAPH_TABLE RTE */
 				ListCell   *aliasp_item = list_head(rte->eref->colnames);
 				ListCell   *lct;
 				ListCell   *lcm;
@@ -3309,12 +3402,12 @@ get_rte_attribute_is_dropped(RangeTblEntry *rte, AttrNumber attnum)
 		case RTE_SUBQUERY:
 		case RTE_TABLEFUNC:
 		case RTE_VALUES:
-		case RTE_GRAPH_TABLE:
 		case RTE_CTE:
+		case RTE_GRAPH_TABLE:
 
 			/*
-			 * Subselect, Table Functions, Values, CTE RTEs never have dropped
-			 * columns
+			 * Subselect, Table Functions, Values, CTE RTEs, Property
+			 * graph references never have dropped columns
 			 */
 			result = false;
 			break;

@@ -569,8 +569,15 @@ check_agglevels_and_constraints(ParseState *pstate, Node *expr)
 			break;
 
 		case EXPR_KIND_CYCLE_MARK:
-		case EXPR_KIND_PROPGRAPH_PROPERTY:
 			errkind = true;
+			break;
+
+		case EXPR_KIND_PROPGRAPH_PROPERTY:
+			if (isAgg)
+				err = _("aggregate functions are not allowed in property definition expressions");
+			else
+				err = _("grouping operations are not allowed in property definition expressions");
+
 			break;
 
 			/*
@@ -960,8 +967,10 @@ transformWindowFuncCall(ParseState *pstate, WindowFunc *wfunc,
 			err = _("window functions are not allowed in column generation expressions");
 			break;
 		case EXPR_KIND_CYCLE_MARK:
-		case EXPR_KIND_PROPGRAPH_PROPERTY:
 			errkind = true;
+			break;
+		case EXPR_KIND_PROPGRAPH_PROPERTY:
+			err = _("window functions are not allowed in property definition expressions");
 			break;
 
 			/*
