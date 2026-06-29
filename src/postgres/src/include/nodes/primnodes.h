@@ -1414,7 +1414,7 @@ typedef struct GraphLabelRef
 {
 	NodeTag		type;
 	Oid			labelid;
-	ParseLoc	location;
+	int			location;
 } GraphLabelRef;
 
 /*
@@ -1428,7 +1428,7 @@ typedef struct GraphPropertyRef
 	Oid			typeId;
 	int32		typmod;
 	Oid			collation;
-	ParseLoc	location;
+	int			location;
 } GraphPropertyRef;
 
 /*--------------------

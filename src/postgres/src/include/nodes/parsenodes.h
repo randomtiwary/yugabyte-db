@@ -645,7 +645,7 @@ typedef struct RangeGraphTable
 	struct GraphPattern *graph_pattern;
 	List	   *columns;
 	Alias	   *alias;			/* table alias & optional column aliases */
-	ParseLoc	location;		/* token location, or -1 if unknown */
+	int			location;		/* token location, or -1 if unknown */
 } RangeGraphTable;
 
 /*
@@ -953,7 +953,7 @@ typedef struct GraphElementPattern
 	List	   *subexpr;
 	Node	   *whereClause;
 	List	   *quantifier;
-	ParseLoc	location;
+	int			location;
 } GraphElementPattern;
 
 /****************************************************************************
@@ -1013,7 +1013,6 @@ typedef struct GraphElementPattern
  *	  q.v.); the parser now uses a separate "namespace" data structure to
  *	  control visibility.  But it is needed by ruleutils.c to determine
  *	  whether RTEs should be shown in decompiled queries.
-	RTE_GRAPH_TABLE,			/* GRAPH_TABLE clause */
  *
  *	  requiredPerms and checkAsUser specify run-time access permissions
  *	  checks to be performed at query startup.  The user must have *all*
@@ -1055,6 +1054,7 @@ typedef enum RTEKind
 	RTE_FUNCTION,				/* function in FROM */
 	RTE_TABLEFUNC,				/* TableFunc(.., column list) */
 	RTE_VALUES,					/* VALUES (<exprlist>), (<exprlist>), ... */
+	RTE_GRAPH_TABLE,				/* GRAPH_TABLE clause */
 	RTE_CTE,					/* common table expr (WITH list element) */
 	RTE_NAMEDTUPLESTORE,		/* tuplestore, e.g. for AFTER triggers */
 	RTE_RESULT					/* RTE represents an empty FROM clause; such
@@ -3811,7 +3811,7 @@ typedef struct PropGraphVertex
 	RangeVar   *vtable;
 	List	   *vkey;
 	List	   *labels;
-	ParseLoc	location;
+	int			location;
 } PropGraphVertex;
 
 typedef struct PropGraphEdge
@@ -3826,7 +3826,7 @@ typedef struct PropGraphEdge
 	char	   *edestvertex;
 	List	   *edestvertexcols;
 	List	   *labels;
-	ParseLoc	location;
+	int			location;
 } PropGraphEdge;
 
 typedef struct PropGraphLabelAndProperties
@@ -3834,7 +3834,7 @@ typedef struct PropGraphLabelAndProperties
 	NodeTag		type;
 	const char *label;
 	struct PropGraphProperties *properties;
-	ParseLoc	location;
+	int			location;
 } PropGraphLabelAndProperties;
 
 typedef struct PropGraphProperties
@@ -3842,7 +3842,7 @@ typedef struct PropGraphProperties
 	NodeTag		type;
 	List	   *properties;
 	bool		all;
-	ParseLoc	location;
+	int			location;
 } PropGraphProperties;
 
 /* ----------------------
