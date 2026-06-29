@@ -482,6 +482,7 @@ does_not_exist_skipping(ObjectType objtype, Node *object)
 			}
 			break;
 		case OBJECT_OPFAMILY:
+		case OBJECT_PROPGRAPH:
 			{
 				List	   *opfname = list_copy_tail(castNode(List, object), 1);
 

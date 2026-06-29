@@ -47,6 +47,7 @@
 #include "commands/portalcmds.h"
 #include "commands/prepare.h"
 #include "commands/proclang.h"
+#include "commands/propgraphcmds.h"
 #include "commands/publicationcmds.h"
 #include "commands/schemacmds.h"
 #include "commands/seclabel.h"
@@ -176,6 +177,7 @@ ClassifyUtilityCommandAsReadOnly(Node *parsetree)
 		case T_AlterOperatorStmt:
 		case T_AlterOwnerStmt:
 		case T_AlterPolicyStmt:
+		case T_AlterPropGraphStmt:
 		case T_AlterPublicationStmt:
 		case T_AlterRoleSetStmt:
 		case T_AlterRoleStmt:
@@ -206,6 +208,7 @@ ClassifyUtilityCommandAsReadOnly(Node *parsetree)
 		case T_CreateOpFamilyStmt:
 		case T_CreatePLangStmt:
 		case T_CreatePolicyStmt:
+		case T_CreatePropGraphStmt:
 		case T_CreatePublicationStmt:
 		case T_CreateRangeStmt:
 		case T_CreateRoleStmt:
@@ -1933,6 +1936,14 @@ ProcessUtilitySlow(ParseState *pstate,
 				commandCollected = true;
 				break;
 
+			case T_CreatePropGraphStmt:
+				address = CreatePropGraph(pstate, (CreatePropGraphStmt *) parsetree);
+				break;
+
+			case T_AlterPropGraphStmt:
+				address = AlterPropGraph(pstate, (AlterPropGraphStmt *) parsetree);
+				break;
+
 			case T_CreateTransformStmt:
 				address = CreateTransform((CreateTransformStmt *) parsetree);
 				break;
@@ -2231,6 +2242,14 @@ ExecDropStmt(DropStmt *stmt, bool isTopLevel)
 		case OBJECT_FOREIGN_TABLE:
 			RemoveRelations(stmt);
 			break;
+		case OBJECT_PROPGRAPH:
+			if (!yb_enable_property_graph_queries)
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("property graph queries are disabled"),
+						 errhint("Set yb_enable_property_graph_queries to on.")));
+			RemoveRelations(stmt);
+			break;
 		default:
 			RemoveObjects(stmt);
 			break;
@@ -2511,6 +2530,9 @@ AlterObjectTypeCommandTag(ObjectType objtype)
 			break;
 		case OBJECT_PROCEDURE:
 			tag = CMDTAG_ALTER_PROCEDURE;
+			break;
+		case OBJECT_PROPGRAPH:
+			tag = CMDTAG_ALTER_PROPERTY_GRAPH;
 			break;
 		case OBJECT_ROLE:
 			tag = CMDTAG_ALTER_ROLE;
@@ -2794,6 +2816,9 @@ CreateCommandTag(Node *parsetree)
 					break;
 				case OBJECT_INDEX:
 					tag = CMDTAG_DROP_INDEX;
+					break;
+				case OBJECT_PROPGRAPH:
+					tag = CMDTAG_DROP_PROPERTY_GRAPH;
 					break;
 				case OBJECT_TYPE:
 					tag = CMDTAG_DROP_TYPE;
@@ -3180,6 +3205,14 @@ CreateCommandTag(Node *parsetree)
 				default:
 					tag = CMDTAG_UNKNOWN;
 			}
+			break;
+
+		case T_CreatePropGraphStmt:
+			tag = CMDTAG_CREATE_PROPERTY_GRAPH;
+			break;
+
+		case T_AlterPropGraphStmt:
+			tag = CMDTAG_ALTER_PROPERTY_GRAPH;
 			break;
 
 		case T_CreateTransformStmt:
@@ -3892,6 +3925,14 @@ GetCommandLogLevel(Node *parsetree)
 			break;
 
 		case T_CreateOpFamilyStmt:
+			lev = LOGSTMT_DDL;
+			break;
+
+		case T_CreatePropGraphStmt:
+			lev = LOGSTMT_DDL;
+			break;
+
+		case T_AlterPropGraphStmt:
 			lev = LOGSTMT_DDL;
 			break;
 
