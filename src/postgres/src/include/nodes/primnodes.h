@@ -1407,6 +1407,30 @@ typedef struct InferenceElem
 	Oid			inferopclass;	/* OID of att opclass, or InvalidOid */
 } InferenceElem;
 
+/*
+ * GraphLabelRef - label reference in label expression inside GRAPH_TABLE clause
+ */
+typedef struct GraphLabelRef
+{
+	NodeTag		type;
+	Oid			labelid;
+	ParseLoc	location;
+} GraphLabelRef;
+
+/*
+ * GraphPropertyRef - property reference inside GRAPH_TABLE clause
+ */
+typedef struct GraphPropertyRef
+{
+	Expr		xpr;
+	const char *elvarname;
+	Oid			propid;
+	Oid			typeId;
+	int32		typmod;
+	Oid			collation;
+	ParseLoc	location;
+} GraphPropertyRef;
+
 /*--------------------
  * TargetEntry -
  *	   a target entry (used in query target lists)

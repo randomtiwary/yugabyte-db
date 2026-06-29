@@ -2627,6 +2627,165 @@ _copyPlaceHolderInfo(const PlaceHolderInfo *from)
  * ****************************************************************
  */
 
+
+static GraphLabelRef *
+_copyGraphLabelRef(const GraphLabelRef *from)
+{
+	GraphLabelRef *newnode = makeNode(GraphLabelRef);
+
+	COPY_SCALAR_FIELD(labelid);
+	COPY_LOCATION_FIELD(location);
+
+	return newnode;
+}
+
+static GraphPropertyRef *
+_copyGraphPropertyRef(const GraphPropertyRef *from)
+{
+	GraphPropertyRef *newnode = makeNode(GraphPropertyRef);
+
+	COPY_STRING_FIELD(elvarname);
+	COPY_SCALAR_FIELD(propid);
+	COPY_SCALAR_FIELD(typeId);
+	COPY_SCALAR_FIELD(typmod);
+	COPY_SCALAR_FIELD(collation);
+	COPY_LOCATION_FIELD(location);
+
+	return newnode;
+}
+
+static GraphPattern *
+_copyGraphPattern(const GraphPattern *from)
+{
+	GraphPattern *newnode = makeNode(GraphPattern);
+
+	COPY_NODE_FIELD(path_pattern_list);
+	COPY_NODE_FIELD(whereClause);
+
+	return newnode;
+}
+
+static GraphElementPattern *
+_copyGraphElementPattern(const GraphElementPattern *from)
+{
+	GraphElementPattern *newnode = makeNode(GraphElementPattern);
+
+	COPY_SCALAR_FIELD(kind);
+	COPY_STRING_FIELD(variable);
+	COPY_NODE_FIELD(labelexpr);
+	COPY_NODE_FIELD(subexpr);
+	COPY_NODE_FIELD(whereClause);
+	COPY_NODE_FIELD(quantifier);
+	COPY_LOCATION_FIELD(location);
+
+	return newnode;
+}
+
+static RangeGraphTable *
+_copyRangeGraphTable(const RangeGraphTable *from)
+{
+	RangeGraphTable *newnode = makeNode(RangeGraphTable);
+
+	COPY_NODE_FIELD(graph_name);
+	COPY_NODE_FIELD(graph_pattern);
+	COPY_NODE_FIELD(columns);
+	COPY_NODE_FIELD(alias);
+	COPY_LOCATION_FIELD(location);
+
+	return newnode;
+}
+
+static CreatePropGraphStmt *
+_copyCreatePropGraphStmt(const CreatePropGraphStmt *from)
+{
+	CreatePropGraphStmt *newnode = makeNode(CreatePropGraphStmt);
+
+	COPY_NODE_FIELD(pgname);
+	COPY_NODE_FIELD(vertex_tables);
+	COPY_NODE_FIELD(edge_tables);
+
+	return newnode;
+}
+
+static AlterPropGraphStmt *
+_copyAlterPropGraphStmt(const AlterPropGraphStmt *from)
+{
+	AlterPropGraphStmt *newnode = makeNode(AlterPropGraphStmt);
+
+	COPY_NODE_FIELD(pgname);
+	COPY_SCALAR_FIELD(missing_ok);
+	COPY_NODE_FIELD(add_vertex_tables);
+	COPY_NODE_FIELD(add_edge_tables);
+	COPY_NODE_FIELD(drop_vertex_tables);
+	COPY_NODE_FIELD(drop_edge_tables);
+	COPY_SCALAR_FIELD(drop_behavior);
+	COPY_SCALAR_FIELD(element_kind);
+	COPY_STRING_FIELD(element_alias);
+	COPY_NODE_FIELD(add_labels);
+	COPY_STRING_FIELD(drop_label);
+	COPY_STRING_FIELD(alter_label);
+	COPY_NODE_FIELD(add_properties);
+	COPY_NODE_FIELD(drop_properties);
+
+	return newnode;
+}
+
+static PropGraphVertex *
+_copyPropGraphVertex(const PropGraphVertex *from)
+{
+	PropGraphVertex *newnode = makeNode(PropGraphVertex);
+
+	COPY_NODE_FIELD(vtable);
+	COPY_NODE_FIELD(vkey);
+	COPY_NODE_FIELD(labels);
+	COPY_LOCATION_FIELD(location);
+
+	return newnode;
+}
+
+static PropGraphEdge *
+_copyPropGraphEdge(const PropGraphEdge *from)
+{
+	PropGraphEdge *newnode = makeNode(PropGraphEdge);
+
+	COPY_NODE_FIELD(etable);
+	COPY_NODE_FIELD(ekey);
+	COPY_NODE_FIELD(esrckey);
+	COPY_STRING_FIELD(esrcvertex);
+	COPY_NODE_FIELD(esrcvertexcols);
+	COPY_NODE_FIELD(edestkey);
+	COPY_STRING_FIELD(edestvertex);
+	COPY_NODE_FIELD(edestvertexcols);
+	COPY_NODE_FIELD(labels);
+	COPY_LOCATION_FIELD(location);
+
+	return newnode;
+}
+
+static PropGraphLabelAndProperties *
+_copyPropGraphLabelAndProperties(const PropGraphLabelAndProperties *from)
+{
+	PropGraphLabelAndProperties *newnode = makeNode(PropGraphLabelAndProperties);
+
+	COPY_STRING_FIELD(label);
+	COPY_NODE_FIELD(properties);
+	COPY_LOCATION_FIELD(location);
+
+	return newnode;
+}
+
+static PropGraphProperties *
+_copyPropGraphProperties(const PropGraphProperties *from)
+{
+	PropGraphProperties *newnode = makeNode(PropGraphProperties);
+
+	COPY_NODE_FIELD(properties);
+	COPY_SCALAR_FIELD(all);
+	COPY_LOCATION_FIELD(location);
+
+	return newnode;
+}
+
 static RangeTblEntry *
 _copyRangeTblEntry(const RangeTblEntry *from)
 {
@@ -2649,6 +2808,8 @@ _copyRangeTblEntry(const RangeTblEntry *from)
 	COPY_SCALAR_FIELD(funcordinality);
 	COPY_NODE_FIELD(tablefunc);
 	COPY_NODE_FIELD(values_lists);
+	COPY_NODE_FIELD(graph_pattern);
+	COPY_NODE_FIELD(graph_table_columns);
 	COPY_STRING_FIELD(ctename);
 	COPY_SCALAR_FIELD(ctelevelsup);
 	COPY_SCALAR_FIELD(self_reference);
@@ -5774,6 +5935,12 @@ copyObjectImpl(const void *from)
 		case T_PlaceHolderVar:
 			retval = _copyPlaceHolderVar(from);
 			break;
+		case T_GraphLabelRef:
+			retval = _copyGraphLabelRef(from);
+			break;
+		case T_GraphPropertyRef:
+			retval = _copyGraphPropertyRef(from);
+			break;
 		case T_SpecialJoinInfo:
 			retval = _copySpecialJoinInfo(from);
 			break;
@@ -6191,6 +6358,33 @@ copyObjectImpl(const void *from)
 			break;
 		case T_AlterPolicyStmt:
 			retval = _copyAlterPolicyStmt(from);
+			break;
+		case T_CreatePropGraphStmt:
+			retval = _copyCreatePropGraphStmt(from);
+			break;
+		case T_AlterPropGraphStmt:
+			retval = _copyAlterPropGraphStmt(from);
+			break;
+		case T_PropGraphVertex:
+			retval = _copyPropGraphVertex(from);
+			break;
+		case T_PropGraphEdge:
+			retval = _copyPropGraphEdge(from);
+			break;
+		case T_PropGraphLabelAndProperties:
+			retval = _copyPropGraphLabelAndProperties(from);
+			break;
+		case T_PropGraphProperties:
+			retval = _copyPropGraphProperties(from);
+			break;
+		case T_RangeGraphTable:
+			retval = _copyRangeGraphTable(from);
+			break;
+		case T_GraphPattern:
+			retval = _copyGraphPattern(from);
+			break;
+		case T_GraphElementPattern:
+			retval = _copyGraphElementPattern(from);
 			break;
 		case T_CreatePublicationStmt:
 			retval = _copyCreatePublicationStmt(from);

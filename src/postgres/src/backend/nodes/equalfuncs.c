@@ -2820,6 +2820,143 @@ _equalLockingClause(const LockingClause *a, const LockingClause *b)
 	return true;
 }
 
+
+static bool
+_equalGraphLabelRef(const GraphLabelRef *a, const GraphLabelRef *b)
+{
+	COMPARE_SCALAR_FIELD(labelid);
+	COMPARE_LOCATION_FIELD(location);
+
+	return true;
+}
+
+static bool
+_equalGraphPropertyRef(const GraphPropertyRef *a, const GraphPropertyRef *b)
+{
+	COMPARE_STRING_FIELD(elvarname);
+	COMPARE_SCALAR_FIELD(propid);
+	COMPARE_SCALAR_FIELD(typeId);
+	COMPARE_SCALAR_FIELD(typmod);
+	COMPARE_SCALAR_FIELD(collation);
+	COMPARE_LOCATION_FIELD(location);
+
+	return true;
+}
+
+static bool
+_equalGraphPattern(const GraphPattern *a, const GraphPattern *b)
+{
+	COMPARE_NODE_FIELD(path_pattern_list);
+	COMPARE_NODE_FIELD(whereClause);
+
+	return true;
+}
+
+static bool
+_equalGraphElementPattern(const GraphElementPattern *a, const GraphElementPattern *b)
+{
+	COMPARE_SCALAR_FIELD(kind);
+	COMPARE_STRING_FIELD(variable);
+	COMPARE_NODE_FIELD(labelexpr);
+	COMPARE_NODE_FIELD(subexpr);
+	COMPARE_NODE_FIELD(whereClause);
+	COMPARE_NODE_FIELD(quantifier);
+	COMPARE_LOCATION_FIELD(location);
+
+	return true;
+}
+
+static bool
+_equalRangeGraphTable(const RangeGraphTable *a, const RangeGraphTable *b)
+{
+	COMPARE_NODE_FIELD(graph_name);
+	COMPARE_NODE_FIELD(graph_pattern);
+	COMPARE_NODE_FIELD(columns);
+	COMPARE_NODE_FIELD(alias);
+	COMPARE_LOCATION_FIELD(location);
+
+	return true;
+}
+
+static bool
+_equalCreatePropGraphStmt(const CreatePropGraphStmt *a, const CreatePropGraphStmt *b)
+{
+	COMPARE_NODE_FIELD(pgname);
+	COMPARE_NODE_FIELD(vertex_tables);
+	COMPARE_NODE_FIELD(edge_tables);
+
+	return true;
+}
+
+static bool
+_equalAlterPropGraphStmt(const AlterPropGraphStmt *a, const AlterPropGraphStmt *b)
+{
+	COMPARE_NODE_FIELD(pgname);
+	COMPARE_SCALAR_FIELD(missing_ok);
+	COMPARE_NODE_FIELD(add_vertex_tables);
+	COMPARE_NODE_FIELD(add_edge_tables);
+	COMPARE_NODE_FIELD(drop_vertex_tables);
+	COMPARE_NODE_FIELD(drop_edge_tables);
+	COMPARE_SCALAR_FIELD(drop_behavior);
+	COMPARE_SCALAR_FIELD(element_kind);
+	COMPARE_STRING_FIELD(element_alias);
+	COMPARE_NODE_FIELD(add_labels);
+	COMPARE_STRING_FIELD(drop_label);
+	COMPARE_STRING_FIELD(alter_label);
+	COMPARE_NODE_FIELD(add_properties);
+	COMPARE_NODE_FIELD(drop_properties);
+
+	return true;
+}
+
+static bool
+_equalPropGraphVertex(const PropGraphVertex *a, const PropGraphVertex *b)
+{
+	COMPARE_NODE_FIELD(vtable);
+	COMPARE_NODE_FIELD(vkey);
+	COMPARE_NODE_FIELD(labels);
+	COMPARE_LOCATION_FIELD(location);
+
+	return true;
+}
+
+static bool
+_equalPropGraphEdge(const PropGraphEdge *a, const PropGraphEdge *b)
+{
+	COMPARE_NODE_FIELD(etable);
+	COMPARE_NODE_FIELD(ekey);
+	COMPARE_NODE_FIELD(esrckey);
+	COMPARE_STRING_FIELD(esrcvertex);
+	COMPARE_NODE_FIELD(esrcvertexcols);
+	COMPARE_NODE_FIELD(edestkey);
+	COMPARE_STRING_FIELD(edestvertex);
+	COMPARE_NODE_FIELD(edestvertexcols);
+	COMPARE_NODE_FIELD(labels);
+	COMPARE_LOCATION_FIELD(location);
+
+	return true;
+}
+
+static bool
+_equalPropGraphLabelAndProperties(const PropGraphLabelAndProperties *a, const PropGraphLabelAndProperties *b)
+{
+	COMPARE_STRING_FIELD(label);
+	COMPARE_NODE_FIELD(properties);
+	COMPARE_LOCATION_FIELD(location);
+
+	return true;
+}
+
+static bool
+_equalPropGraphProperties(const PropGraphProperties *a, const PropGraphProperties *b)
+{
+	COMPARE_NODE_FIELD(properties);
+	COMPARE_SCALAR_FIELD(all);
+	COMPARE_LOCATION_FIELD(location);
+
+	return true;
+}
+
 static bool
 _equalRangeTblEntry(const RangeTblEntry *a, const RangeTblEntry *b)
 {
@@ -2840,6 +2977,8 @@ _equalRangeTblEntry(const RangeTblEntry *a, const RangeTblEntry *b)
 	COMPARE_SCALAR_FIELD(funcordinality);
 	COMPARE_NODE_FIELD(tablefunc);
 	COMPARE_NODE_FIELD(values_lists);
+	COMPARE_NODE_FIELD(graph_pattern);
+	COMPARE_NODE_FIELD(graph_table_columns);
 	COMPARE_STRING_FIELD(ctename);
 	COMPARE_SCALAR_FIELD(ctelevelsup);
 	COMPARE_SCALAR_FIELD(self_reference);
@@ -3511,6 +3650,12 @@ equal(const void *a, const void *b)
 		case T_PlaceHolderVar:
 			retval = _equalPlaceHolderVar(a, b);
 			break;
+		case T_GraphLabelRef:
+			retval = _equalGraphLabelRef(a, b);
+			break;
+		case T_GraphPropertyRef:
+			retval = _equalGraphPropertyRef(a, b);
+			break;
 		case T_SpecialJoinInfo:
 			retval = _equalSpecialJoinInfo(a, b);
 			break;
@@ -3915,6 +4060,33 @@ equal(const void *a, const void *b)
 			break;
 		case T_AlterPolicyStmt:
 			retval = _equalAlterPolicyStmt(a, b);
+			break;
+		case T_CreatePropGraphStmt:
+			retval = _equalCreatePropGraphStmt(a, b);
+			break;
+		case T_AlterPropGraphStmt:
+			retval = _equalAlterPropGraphStmt(a, b);
+			break;
+		case T_PropGraphVertex:
+			retval = _equalPropGraphVertex(a, b);
+			break;
+		case T_PropGraphEdge:
+			retval = _equalPropGraphEdge(a, b);
+			break;
+		case T_PropGraphLabelAndProperties:
+			retval = _equalPropGraphLabelAndProperties(a, b);
+			break;
+		case T_PropGraphProperties:
+			retval = _equalPropGraphProperties(a, b);
+			break;
+		case T_RangeGraphTable:
+			retval = _equalRangeGraphTable(a, b);
+			break;
+		case T_GraphPattern:
+			retval = _equalGraphPattern(a, b);
+			break;
+		case T_GraphElementPattern:
+			retval = _equalGraphElementPattern(a, b);
 			break;
 		case T_CreatePublicationStmt:
 			retval = _equalCreatePublicationStmt(a, b);

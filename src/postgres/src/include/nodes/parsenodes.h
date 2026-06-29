@@ -636,6 +636,19 @@ typedef struct RangeTableFuncCol
 } RangeTableFuncCol;
 
 /*
+ * RangeGraphTable - raw form of GRAPH_TABLE clause
+ */
+typedef struct RangeGraphTable
+{
+	NodeTag		type;
+	RangeVar   *graph_name;
+	struct GraphPattern *graph_pattern;
+	List	   *columns;
+	Alias	   *alias;			/* table alias & optional column aliases */
+	ParseLoc	location;		/* token location, or -1 if unknown */
+} RangeGraphTable;
+
+/*
  * RangeTableSample - TABLESAMPLE appearing in a raw FROM clause
  *
  * This node, appearing only in raw parse trees, represents
@@ -907,6 +920,42 @@ typedef struct PartitionCmd
 	bool		concurrent;
 } PartitionCmd;
 
+/*
+ * Nodes for graph pattern
+ */
+
+typedef struct GraphPattern
+{
+	NodeTag		type;
+	List	   *path_pattern_list;
+	Node	   *whereClause;
+} GraphPattern;
+
+typedef enum GraphElementPatternKind
+{
+	VERTEX_PATTERN,
+	EDGE_PATTERN_LEFT,
+	EDGE_PATTERN_RIGHT,
+	EDGE_PATTERN_ANY,
+	PAREN_EXPR,
+} GraphElementPatternKind;
+
+#define IS_EDGE_PATTERN(kind) ((kind) == EDGE_PATTERN_ANY || \
+							   (kind) == EDGE_PATTERN_RIGHT || \
+							   (kind) == EDGE_PATTERN_LEFT)
+
+typedef struct GraphElementPattern
+{
+	NodeTag		type;
+	GraphElementPatternKind kind;
+	const char *variable;
+	Node	   *labelexpr;
+	List	   *subexpr;
+	Node	   *whereClause;
+	List	   *quantifier;
+	ParseLoc	location;
+} GraphElementPattern;
+
 /****************************************************************************
  *	Nodes for a Query tree
  ****************************************************************************/
@@ -964,6 +1013,7 @@ typedef struct PartitionCmd
  *	  q.v.); the parser now uses a separate "namespace" data structure to
  *	  control visibility.  But it is needed by ruleutils.c to determine
  *	  whether RTEs should be shown in decompiled queries.
+	RTE_GRAPH_TABLE,			/* GRAPH_TABLE clause */
  *
  *	  requiredPerms and checkAsUser specify run-time access permissions
  *	  checks to be performed at query startup.  The user must have *all*
@@ -1117,6 +1167,12 @@ typedef struct RangeTblEntry
 	 * Fields valid for a TableFunc RTE (else NULL):
 	 */
 	TableFunc  *tablefunc;
+
+	/*
+	 * Fields valid for a graph table RTE (else NULL):
+	 */
+	GraphPattern *graph_pattern;
+	List	   *graph_table_columns;
 
 	/*
 	 * Fields valid for a values RTE (else NIL):
@@ -1888,6 +1944,7 @@ typedef enum ObjectType
 	OBJECT_PARAMETER_ACL,
 	OBJECT_POLICY,
 	OBJECT_PROCEDURE,
+	OBJECT_PROPGRAPH,
 	OBJECT_PUBLICATION,
 	OBJECT_PUBLICATION_NAMESPACE,
 	OBJECT_PUBLICATION_REL,
@@ -3735,6 +3792,88 @@ typedef struct CreateCastStmt
 	CoercionContext context;
 	bool		inout;
 } CreateCastStmt;
+
+/* ----------------------
+ *	CREATE PROPERTY GRAPH Statement
+ * ----------------------
+ */
+typedef struct CreatePropGraphStmt
+{
+	NodeTag		type;
+	RangeVar   *pgname;
+	List	   *vertex_tables;
+	List	   *edge_tables;
+} CreatePropGraphStmt;
+
+typedef struct PropGraphVertex
+{
+	NodeTag		type;
+	RangeVar   *vtable;
+	List	   *vkey;
+	List	   *labels;
+	ParseLoc	location;
+} PropGraphVertex;
+
+typedef struct PropGraphEdge
+{
+	NodeTag		type;
+	RangeVar   *etable;
+	List	   *ekey;
+	List	   *esrckey;
+	char	   *esrcvertex;
+	List	   *esrcvertexcols;
+	List	   *edestkey;
+	char	   *edestvertex;
+	List	   *edestvertexcols;
+	List	   *labels;
+	ParseLoc	location;
+} PropGraphEdge;
+
+typedef struct PropGraphLabelAndProperties
+{
+	NodeTag		type;
+	const char *label;
+	struct PropGraphProperties *properties;
+	ParseLoc	location;
+} PropGraphLabelAndProperties;
+
+typedef struct PropGraphProperties
+{
+	NodeTag		type;
+	List	   *properties;
+	bool		all;
+	ParseLoc	location;
+} PropGraphProperties;
+
+/* ----------------------
+ *	ALTER PROPERTY GRAPH Statement
+ * ----------------------
+ */
+
+typedef enum AlterPropGraphElementKind
+{
+	PROPGRAPH_ELEMENT_KIND_VERTEX = 1,
+	PROPGRAPH_ELEMENT_KIND_EDGE = 2,
+} AlterPropGraphElementKind;
+
+typedef struct AlterPropGraphStmt
+{
+	NodeTag		type;
+	RangeVar   *pgname;
+	bool		missing_ok;
+	List	   *add_vertex_tables;
+	List	   *add_edge_tables;
+	List	   *drop_vertex_tables;
+	List	   *drop_edge_tables;
+	DropBehavior drop_behavior;
+	AlterPropGraphElementKind element_kind;
+	const char *element_alias;
+	List	   *add_labels;
+	const char *drop_label;
+	const char *alter_label;
+	PropGraphProperties *add_properties;
+	List	   *drop_properties;
+} AlterPropGraphStmt;
 
 /* ----------------------
  *	CREATE TRANSFORM Statement

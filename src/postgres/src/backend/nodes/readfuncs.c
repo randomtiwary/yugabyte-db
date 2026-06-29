@@ -1516,6 +1516,14 @@ _readRangeTblEntry(void)
 			READ_NODE_FIELD(coltypmods);
 			READ_NODE_FIELD(colcollations);
 			break;
+		case RTE_GRAPH_TABLE:
+			READ_NODE_FIELD(graph_pattern);
+			READ_NODE_FIELD(graph_table_columns);
+			/* we re-use these RELATION fields, too: */
+			READ_OID_FIELD(relid);
+			READ_CHAR_FIELD(relkind);
+			READ_INT_FIELD(rellockmode);
+			break;
 		case RTE_CTE:
 			READ_STRING_FIELD(ctename);
 			READ_UINT_FIELD(ctelevelsup);
