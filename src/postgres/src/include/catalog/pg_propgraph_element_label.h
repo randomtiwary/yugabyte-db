@@ -48,6 +48,5 @@ DECLARE_UNIQUE_INDEX_PKEY(pg_propgraph_element_label_oid_index, 8312, PropgraphE
 DECLARE_UNIQUE_INDEX(pg_propgraph_element_label_element_label_index, 8313, PropgraphElementLabelElementLabelIndexId, on pg_propgraph_element_label using btree(pgelelid oid_ops, pgellabelid oid_ops));
 DECLARE_INDEX(pg_propgraph_element_label_label_index, 8317, PropgraphElementLabelLabelIndexId, on pg_propgraph_element_label using btree(pgellabelid oid_ops));
 
-MAKE_SYSCACHE(PROPGRAPHELEMENTLABELELEMENTLABEL, pg_propgraph_element_label_element_label_index, 128);
 
 #endif							/* PG_PROPGRAPH_ELEMENT_LABEL_H */

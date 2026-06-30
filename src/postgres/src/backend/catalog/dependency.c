@@ -165,49 +165,52 @@ typedef struct
 static const Oid object_classes[] = {
 	RelationRelationId,			/* OCLASS_CLASS */
 	ProcedureRelationId,		/* OCLASS_PROC */
-	TypeRelationId,				/* OCLASS_TYPE */
-	CastRelationId,				/* OCLASS_CAST */
+	TypeRelationId,			/* OCLASS_TYPE */
+	CastRelationId,			/* OCLASS_CAST */
 	CollationRelationId,		/* OCLASS_COLLATION */
 	ConstraintRelationId,		/* OCLASS_CONSTRAINT */
 	ConversionRelationId,		/* OCLASS_CONVERSION */
 	AttrDefaultRelationId,		/* OCLASS_DEFAULT */
-	LanguageRelationId,			/* OCLASS_LANGUAGE */
+	LanguageRelationId,		/* OCLASS_LANGUAGE */
 	LargeObjectRelationId,		/* OCLASS_LARGEOBJECT */
-	OperatorRelationId,			/* OCLASS_OPERATOR */
+	OperatorRelationId,		/* OCLASS_OPERATOR */
 	OperatorClassRelationId,	/* OCLASS_OPCLASS */
 	OperatorFamilyRelationId,	/* OCLASS_OPFAMILY */
-	AccessMethodRelationId,		/* OCLASS_AM */
+	AccessMethodRelationId,	/* OCLASS_AM */
 	AccessMethodOperatorRelationId, /* OCLASS_AMOP */
-	AccessMethodProcedureRelationId,	/* OCLASS_AMPROC */
-	RewriteRelationId,			/* OCLASS_REWRITE */
-	TriggerRelationId,			/* OCLASS_TRIGGER */
+	AccessMethodProcedureRelationId,/* OCLASS_AMPROC */
+	RewriteRelationId,		/* OCLASS_REWRITE */
+	TriggerRelationId,		/* OCLASS_TRIGGER */
 	NamespaceRelationId,		/* OCLASS_SCHEMA */
-	StatisticExtRelationId,		/* OCLASS_STATISTIC_EXT */
-	TSParserRelationId,			/* OCLASS_TSPARSER */
-	TSDictionaryRelationId,		/* OCLASS_TSDICT */
+	StatisticExtRelationId,	/* OCLASS_STATISTIC_EXT */
+	TSParserRelationId,		/* OCLASS_TSPARSER */
+	TSDictionaryRelationId,	/* OCLASS_TSDICT */
 	TSTemplateRelationId,		/* OCLASS_TSTEMPLATE */
-	TSConfigRelationId,			/* OCLASS_TSCONFIG */
-	AuthIdRelationId,			/* OCLASS_ROLE */
-	DatabaseRelationId,			/* OCLASS_DATABASE */
+	TSConfigRelationId,		/* OCLASS_TSCONFIG */
+	AuthIdRelationId,		/* OCLASS_ROLE */
+	DatabaseRelationId,		/* OCLASS_DATABASE */
+	YbTablegroupRelationId,	/* OCLASS_YBTBLGROUP */
 	TableSpaceRelationId,		/* OCLASS_TBLSPACE */
-	ForeignDataWrapperRelationId,	/* OCLASS_FDW */
+	ForeignDataWrapperRelationId,/* OCLASS_FDW */
 	ForeignServerRelationId,	/* OCLASS_FOREIGN_SERVER */
-	UserMappingRelationId,		/* OCLASS_USER_MAPPING */
+	UserMappingRelationId,	/* OCLASS_USER_MAPPING */
 	DefaultAclRelationId,		/* OCLASS_DEFACL */
 	ExtensionRelationId,		/* OCLASS_EXTENSION */
-	EventTriggerRelationId,		/* OCLASS_EVENT_TRIGGER */
-	ParameterAclRelationId,		/* OCLASS_PARAMETER_ACL */
-	PolicyRelationId,			/* OCLASS_POLICY */
+	EventTriggerRelationId,	/* OCLASS_EVENT_TRIGGER */
+	ParameterAclRelationId,	/* OCLASS_PARAMETER_ACL */
+	PolicyRelationId,		/* OCLASS_POLICY */
+	PublicationRelationId,	/* OCLASS_PUBLICATION */
 	PublicationNamespaceRelationId, /* OCLASS_PUBLICATION_NAMESPACE */
-	PublicationRelationId,		/* OCLASS_PUBLICATION */
 	PublicationRelRelationId,	/* OCLASS_PUBLICATION_REL */
-	SubscriptionRelationId,		/* OCLASS_SUBSCRIPTION */
+	SubscriptionRelationId,	/* OCLASS_SUBSCRIPTION */
 	TransformRelationId,		/* OCLASS_TRANSFORM */
-
-	/* YB items */
 	YbProfileRelationId,		/* OCLASS_YBPROFILE */
 	YbRoleProfileRelationId,	/* OCLASS_YBROLE_PROFILE */
-	YbTablegroupRelationId,		/* OCLASS_YBTBLGROUP */
+	PropgraphElementRelationId,	/* OCLASS_PROPGRAPH_ELEMENT */
+	PropgraphElementLabelRelationId,/* OCLASS_PROPGRAPH_ELEMENT_LABEL */
+	PropgraphLabelRelationId,	/* OCLASS_PROPGRAPH_LABEL */
+	PropgraphLabelPropertyRelationId,/* OCLASS_PROPGRAPH_LABEL_PROPERTY */
+	PropgraphPropertyRelationId	/* OCLASS_PROPGRAPH_PROPERTY */
 };
 
 
@@ -1514,11 +1517,6 @@ doDeletion(const ObjectAddress *object, int flags, bool ybOriginalObject)
 
 						if (yb_rel)
 						{
-		case PropgraphElementRelationId:
-		case PropgraphElementLabelRelationId:
-		case PropgraphLabelRelationId:
-		case PropgraphLabelPropertyRelationId:
-		case PropgraphPropertyRelationId:
 							if (IsYBRelation(yb_rel))
 								YBCDropTable(yb_rel);
 
@@ -1633,6 +1631,11 @@ doDeletion(const ObjectAddress *object, int flags, bool ybOriginalObject)
 		case OCLASS_DEFACL:
 		case OCLASS_EVENT_TRIGGER:
 		case OCLASS_TRANSFORM:
+		case OCLASS_PROPGRAPH_ELEMENT:
+		case OCLASS_PROPGRAPH_ELEMENT_LABEL:
+		case OCLASS_PROPGRAPH_LABEL:
+		case OCLASS_PROPGRAPH_LABEL_PROPERTY:
+		case OCLASS_PROPGRAPH_PROPERTY:
 			DropObjectById(object);
 			break;
 
@@ -1652,7 +1655,6 @@ doDeletion(const ObjectAddress *object, int flags, bool ybOriginalObject)
 		case OCLASS_YBROLE_PROFILE:
 			elog(ERROR, "global objects cannot be deleted by doDeletion");
 			break;
-
 			/*
 			 * There's intentionally no default: case here; we want the
 			 * compiler to warn if a new OCLASS hasn't been handled above.
@@ -2272,7 +2274,6 @@ find_expr_references_walker(Node *node,
 		SortGroupClause *sgc = (SortGroupClause *) node;
 
 		add_object_address(OCLASS_OPERATOR, sgc->eqop, 0,
-				case RTE_GRAPH_TABLE:
 						   context->addrs);
 		if (OidIsValid(sgc->sortop))
 			add_object_address(OCLASS_OPERATOR, sgc->sortop, 0,

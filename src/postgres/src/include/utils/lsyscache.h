@@ -202,6 +202,9 @@ extern bool get_index_isclustered(Oid index_oid);
 /* YB */
 extern float4 yb_get_attdistinctcount(Oid relid, AttrNumber attnum);
 
+extern char *get_propgraph_label_name(Oid labeloid);
+extern char *get_propgraph_property_name(Oid propoid);
+
 #define type_is_array(typid)  (get_element_type(typid) != InvalidOid)
 /* type_is_array_domain accepts both plain arrays and domains over arrays */
 #define type_is_array_domain(typid)  (get_base_element_type(typid) != InvalidOid)

@@ -104,8 +104,9 @@ static List *get_graph_property_ids(Oid graphid);
 ObjectAddress
 CreatePropGraph(ParseState *pstate, const CreatePropGraphStmt *stmt)
 {
-
-	/* YB: feature is gated by yb_enable_property_graph_queries */
+	ListCell   *lc;
+	ListCell   *lc_oid;
+	/* YB: gated by yb_enable_property_graph_queries */
 	if (!yb_enable_property_graph_queries)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -114,7 +115,6 @@ CreatePropGraph(ParseState *pstate, const CreatePropGraphStmt *stmt)
 
 	CreateStmt *cstmt = makeNode(CreateStmt);
 	char		components_persistence;
-	ListCell   *lc;
 	ObjectAddress pgaddress;
 	List	   *vertex_infos = NIL;
 	List	   *edge_infos = NIL;
@@ -318,8 +318,12 @@ CreatePropGraph(ParseState *pstate, const CreatePropGraphStmt *stmt)
 
 	CommandCounterIncrement();
 
-	foreach_oid(peoid, element_oids)
+	foreach(lc_oid, element_oids)
+	{
+		Oid		peoid = lfirst_oid(lc_oid);
+
 		check_element_properties(peoid);
+	}
 	check_all_labels_properties(pgaddress.objectId);
 
 	return pgaddress;
@@ -337,7 +341,7 @@ propgraph_element_get_key(ParseState *pstate, const List *key_clause, Relation e
 
 	if (key_clause == NIL)
 	{
-		Oid			pkidx = RelationGetPrimaryKeyIndex(element_rel, false);
+		Oid			pkidx = RelationGetPrimaryKeyIndex(element_rel);
 
 		if (!pkidx)
 			ereport(ERROR,
@@ -382,6 +386,7 @@ propgraph_edge_get_ref_keys(ParseState *pstate, const List *keycols, const List 
 							const char *aliasname, int location, const char *type,
 							ArrayType **outkey, ArrayType **outref, ArrayType **outeqop)
 {
+	ListCell   *lc_fk;
 	int			nkeys;
 	AttrNumber *keyattnums;
 	AttrNumber *refattnums;
@@ -486,8 +491,9 @@ propgraph_edge_get_ref_keys(ParseState *pstate, const List *keycols, const List 
 	{
 		ForeignKeyCacheInfo *fk = NULL;
 
-		foreach_node(ForeignKeyCacheInfo, tmp, RelationGetFKeyList(edge_rel))
+		foreach(lc_fk, RelationGetFKeyList(edge_rel))
 		{
+			ForeignKeyCacheInfo *tmp = lfirst_node(ForeignKeyCacheInfo, lc_fk);
 			if (tmp->confrelid == RelationGetRelid(ref_rel))
 			{
 				if (fk)
@@ -526,10 +532,10 @@ propgraph_edge_get_ref_keys(ParseState *pstate, const List *keycols, const List 
 static AttrNumber *
 array_from_column_list(ParseState *pstate, const List *colnames, int location, Relation element_rel)
 {
+	ListCell   *lc;
 	int			numattrs;
 	AttrNumber *attnums;
 	int			i;
-	ListCell   *lc;
 
 	numattrs = list_length(colnames);
 	attnums = palloc_array(AttrNumber, numattrs);
@@ -585,7 +591,7 @@ array_of_attnums_to_objectaddrs(Oid relid, ArrayType *arr, ObjectAddresses *addr
 	Datum	   *attnumsd;
 	int			numattrs;
 
-	deconstruct_array_builtin(arr, INT2OID, &attnumsd, NULL, &numattrs);
+	deconstruct_array(arr, INT2OID, 2, true, 's', &attnumsd, NULL, &numattrs);
 
 	for (int i = 0; i < numattrs; i++)
 	{
@@ -602,7 +608,7 @@ array_of_opers_to_objectaddrs(ArrayType *arr, ObjectAddresses *addrs)
 	Datum	   *opersd;
 	int			numopers;
 
-	deconstruct_array_builtin(arr, OIDOID, &opersd, NULL, &numopers);
+	deconstruct_array(arr, OIDOID, 4, true, 'i', &opersd, NULL, &numopers);
 
 	for (int i = 0; i < numopers; i++)
 	{
@@ -831,12 +837,12 @@ insert_label_record(Oid graphid, Oid peoid, const char *label)
 static void
 insert_property_records(Oid graphid, Oid ellabeloid, Oid pgerelid, const PropGraphProperties *properties)
 {
+	ListCell   *lc;
 	List	   *proplist = NIL;
 	ParseState *pstate;
 	ParseNamespaceItem *nsitem;
 	List	   *tp;
 	Relation	rel;
-	ListCell   *lc;
 
 	if (properties->all)
 	{
@@ -1131,8 +1137,8 @@ check_element_properties(Oid peoid)
 						elform = (Form_pg_propgraph_element) GETSTRUCT(tuple3);
 						dpcontext = deparse_context_for(get_rel_name(elform->pgerelid), elform->pgerelid);
 
-						dpa = deparse_expression(na, dpcontext, false, false);
-						dpb = deparse_expression(nb, dpcontext, false, false);
+						dpa = deparse_expression(na, dpcontext, false, false, false, false);
+						dpb = deparse_expression(nb, dpcontext, false, false, false, false);
 
 						/*
 						 * show in sorted order to keep output independent of
@@ -1284,10 +1290,13 @@ check_element_label_properties(Oid ellabeloid)
 static void
 check_all_labels_properties(Oid pgrelid)
 {
-	foreach_oid(labeloid, get_graph_label_ids(pgrelid))
+	ListCell   *lc_oid;
+	foreach(lc_oid, get_graph_label_ids(pgrelid))
 	{
-		foreach_oid(ellabeloid, get_label_element_label_ids(labeloid))
+		Oid		labeloid = lfirst_oid(lc_oid);
+		foreach(lc_oid, get_label_element_label_ids(labeloid))
 		{
+			Oid		ellabeloid = lfirst_oid(lc_oid);
 			check_element_label_properties(ellabeloid);
 		}
 	}
@@ -1299,8 +1308,9 @@ check_all_labels_properties(Oid pgrelid)
 ObjectAddress
 AlterPropGraph(ParseState *pstate, const AlterPropGraphStmt *stmt)
 {
-
-	/* YB: feature is gated by yb_enable_property_graph_queries */
+	ListCell   *lc;
+	ListCell   *lc_oid;
+	/* YB: gated by yb_enable_property_graph_queries */
 	if (!yb_enable_property_graph_queries)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1308,7 +1318,6 @@ AlterPropGraph(ParseState *pstate, const AlterPropGraphStmt *stmt)
 				 errhint("Set yb_enable_property_graph_queries to on.")));
 
 	Oid			pgrelid;
-	ListCell   *lc;
 	ObjectAddress pgaddress;
 
 	pgrelid = RangeVarGetRelidExtended(stmt->pgname,
@@ -1468,8 +1477,9 @@ AlterPropGraph(ParseState *pstate, const AlterPropGraphStmt *stmt)
 	/* Remove any orphaned pg_propgraph_label entries */
 	if (stmt->drop_vertex_tables || stmt->drop_edge_tables)
 	{
-		foreach_oid(labeloid, get_graph_label_ids(pgrelid))
+		foreach(lc_oid, get_graph_label_ids(pgrelid))
 		{
+			Oid		labeloid = lfirst_oid(lc_oid);
 			if (!get_label_element_label_ids(labeloid))
 			{
 				ObjectAddress obj;
@@ -1657,8 +1667,9 @@ AlterPropGraph(ParseState *pstate, const AlterPropGraphStmt *stmt)
 	/* Remove any orphaned pg_propgraph_property entries */
 	if (stmt->drop_properties || stmt->drop_vertex_tables || stmt->drop_edge_tables)
 	{
-		foreach_oid(propoid, get_graph_property_ids(pgrelid))
+		foreach(lc_oid, get_graph_property_ids(pgrelid))
 		{
+			Oid		propoid = lfirst_oid(lc_oid);
 			Relation	rel;
 			SysScanDesc scan;
 			ScanKeyData key[1];

@@ -142,9 +142,14 @@ typedef enum ObjectClass
 	OCLASS_TRANSFORM,			/* pg_transform */
 	OCLASS_YBPROFILE,			/* pg_yb_profile */
 	OCLASS_YBROLE_PROFILE,		/* pg_yb_role_profile */
+	OCLASS_PROPGRAPH_ELEMENT,	/* pg_propgraph_element */
+	OCLASS_PROPGRAPH_ELEMENT_LABEL,	/* pg_propgraph_element_label */
+	OCLASS_PROPGRAPH_LABEL,	/* pg_propgraph_label */
+	OCLASS_PROPGRAPH_LABEL_PROPERTY,	/* pg_propgraph_label_property */
+	OCLASS_PROPGRAPH_PROPERTY	/* pg_propgraph_property */
 } ObjectClass;
 
-#define LAST_OCLASS		OCLASS_YBROLE_PROFILE
+#define LAST_OCLASS	OCLASS_PROPGRAPH_PROPERTY
 
 /* flag bits for performDeletion/performMultipleDeletions: */
 #define PERFORM_DELETION_INTERNAL			0x0001	/* internal action */

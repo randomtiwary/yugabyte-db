@@ -349,12 +349,6 @@ static const struct dropmsgstrings dropmsgstringarray[] = {
 		gettext_noop("index \"%s\" does not exist, skipping"),
 		gettext_noop("\"%s\" is not an index"),
 	gettext_noop("Use DROP INDEX to remove an index.")},
-	{RELKIND_PROPGRAPH,
-		ERRCODE_UNDEFINED_OBJECT,
-		gettext_noop("property graph \"%s\" does not exist"),
-		gettext_noop("property graph \"%s\" does not exist, skipping"),
-		gettext_noop("\"%s\" is not a property graph"),
-	gettext_noop("Use DROP PROPERTY GRAPH to remove a property graph.")},
 	{'\0', 0, NULL, NULL, NULL, NULL}
 };
 
@@ -1646,7 +1640,7 @@ DropErrorMsgWrongType(const char *relname, char wrongkind, char rightkind)
 /*
  * RemoveRelations
  *		Implements DROP TABLE, DROP INDEX, DROP SEQUENCE, DROP VIEW,
- *		DROP MATERIALIZED VIEW, DROP FOREIGN TABLE, DROP PROPERTY GRAPH
+ *		DROP MATERIALIZED VIEW, DROP FOREIGN TABLE
  */
 void
 RemoveRelations(DropStmt *drop)
@@ -1712,10 +1706,6 @@ RemoveRelations(DropStmt *drop)
 
 		case OBJECT_FOREIGN_TABLE:
 			relkind = RELKIND_FOREIGN_TABLE;
-			break;
-
-		case OBJECT_PROPGRAPH:
-			relkind = RELKIND_PROPGRAPH;
 			break;
 
 		default:
@@ -4287,7 +4277,7 @@ RenameConstraint(RenameStmt *stmt)
 }
 
 /*
- * Execute ALTER TABLE/INDEX/SEQUENCE/VIEW/MATERIALIZED VIEW/FOREIGN TABLE/PROPERTY GRAPH
+ * Execute ALTER TABLE/INDEX/SEQUENCE/VIEW/MATERIALIZED VIEW/FOREIGN TABLE
  * RENAME
  * When yb_is_internal_clone_rename is true we don't need to do a YB rename,
  * as this rename is a part of a table clone operation, and the relation
@@ -14344,6 +14334,11 @@ ATExecAlterColumnType(AlteredTableInfo *tab, Relation *yb_mutable_rel,
 			case OCLASS_PUBLICATION_NAMESPACE:
 			case OCLASS_SUBSCRIPTION:
 			case OCLASS_TRANSFORM:
+		case OCLASS_PROPGRAPH_ELEMENT:
+		case OCLASS_PROPGRAPH_ELEMENT_LABEL:
+		case OCLASS_PROPGRAPH_LABEL:
+		case OCLASS_PROPGRAPH_LABEL_PROPERTY:
+		case OCLASS_PROPGRAPH_PROPERTY:
 			case OCLASS_YBPROFILE:
 			case OCLASS_YBROLE_PROFILE:
 
@@ -15545,7 +15540,6 @@ ATExecChangeOwner(Oid relationOid, Oid newOwnerId, bool recursing, LOCKMODE lock
 		case RELKIND_MATVIEW:
 		case RELKIND_FOREIGN_TABLE:
 		case RELKIND_PARTITIONED_TABLE:
-		case RELKIND_PROPGRAPH:
 			/* ok to change owner */
 			break;
 		case RELKIND_INDEX:
@@ -19166,11 +19160,6 @@ RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid, Oid oldrelid,
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				 errmsg("\"%s\" is not a composite type", rv->relname)));
-
-	if (reltype == OBJECT_PROPGRAPH && relkind != RELKIND_PROPGRAPH)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("\"%s\" is not a property graph", rv->relname)));
 
 	if (reltype == OBJECT_INDEX && relkind != RELKIND_INDEX &&
 		relkind != RELKIND_PARTITIONED_INDEX

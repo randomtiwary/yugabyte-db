@@ -100,8 +100,6 @@ DECLARE_TOAST(pg_propgraph_element, 8315, 8316);
 DECLARE_UNIQUE_INDEX_PKEY(pg_propgraph_element_oid_index, 8300, PropgraphElementObjectIndexId, on pg_propgraph_element using btree(oid oid_ops));
 DECLARE_UNIQUE_INDEX(pg_propgraph_element_alias_index, 8301, PropgraphElementAliasIndexId, on pg_propgraph_element using btree(pgepgid oid_ops, pgealias name_ops));
 
-MAKE_SYSCACHE(PROPGRAPHELOID, pg_propgraph_element_oid_index, 128);
-MAKE_SYSCACHE(PROPGRAPHELALIAS, pg_propgraph_element_alias_index, 128);
 
 #ifdef EXPOSE_TO_CLIENT_CODE
 

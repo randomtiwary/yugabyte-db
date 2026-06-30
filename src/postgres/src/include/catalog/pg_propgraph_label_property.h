@@ -56,6 +56,5 @@ DECLARE_TOAST(pg_propgraph_label_property, 8319, 8320);
 DECLARE_UNIQUE_INDEX_PKEY(pg_propgraph_label_property_oid_index, 8328, PropgraphLabelPropertyObjectIndexId, on pg_propgraph_label_property using btree(oid oid_ops));
 DECLARE_UNIQUE_INDEX(pg_propgraph_label_property_label_prop_index, 8329, PropgraphLabelPropertyLabelPropIndexId, on pg_propgraph_label_property using btree(plpellabelid oid_ops, plppropid oid_ops));
 
-MAKE_SYSCACHE(PROPGRAPHLABELPROP, pg_propgraph_label_property_label_prop_index, 128);
 
 #endif							/* PG_PROPGRAPH_LABEL_PROPERTY_H */

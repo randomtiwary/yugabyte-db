@@ -1094,6 +1094,11 @@ EventTriggerSupportsObjectClass(ObjectClass objclass)
 		case OCLASS_PUBLICATION_REL:
 		case OCLASS_SUBSCRIPTION:
 		case OCLASS_TRANSFORM:
+		case OCLASS_PROPGRAPH_ELEMENT:
+		case OCLASS_PROPGRAPH_ELEMENT_LABEL:
+		case OCLASS_PROPGRAPH_LABEL:
+		case OCLASS_PROPGRAPH_LABEL_PROPERTY:
+		case OCLASS_PROPGRAPH_PROPERTY:
 			return true;
 
 			/* YB cases */
@@ -2127,7 +2132,6 @@ stringify_grant_objtype(ObjectType objtype)
 		case OBJECT_OPERATOR:
 		case OBJECT_OPFAMILY:
 		case OBJECT_POLICY:
-		case OBJECT_PROPGRAPH:
 		case OBJECT_PUBLICATION:
 		case OBJECT_PUBLICATION_NAMESPACE:
 		case OBJECT_PUBLICATION_REL:
@@ -2219,7 +2223,6 @@ stringify_adefprivs_objtype(ObjectType objtype)
 		case OBJECT_OPFAMILY:
 		case OBJECT_PARAMETER_ACL:
 		case OBJECT_POLICY:
-		case OBJECT_PROPGRAPH:
 		case OBJECT_PUBLICATION:
 		case OBJECT_PUBLICATION_NAMESPACE:
 		case OBJECT_PUBLICATION_REL:

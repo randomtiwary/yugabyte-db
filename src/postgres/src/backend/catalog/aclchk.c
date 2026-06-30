@@ -279,9 +279,6 @@ restrict_and_check_grant(bool is_grant, AclMode avail_goptions, bool all_privs,
 		case OBJECT_PARAMETER_ACL:
 			whole_mask = ACL_ALL_RIGHTS_PARAMETER_ACL;
 			break;
-		case OBJECT_PROPGRAPH:
-			whole_mask = ACL_ALL_RIGHTS_PROPGRAPH;
-			break;
 		default:
 			elog(ERROR, "unrecognized object type: %d", objtype);
 			/* not reached, but keep compiler quiet */
@@ -530,10 +527,6 @@ ExecuteGrantStmt(GrantStmt *stmt)
 			all_privileges = ACL_ALL_RIGHTS_PARAMETER_ACL;
 			errormsg = gettext_noop("invalid privilege type %s for parameter");
 			break;
-		case OBJECT_PROPGRAPH:
-			all_privileges = ACL_ALL_RIGHTS_PROPGRAPH;
-			errormsg = gettext_noop("invalid privilege type %s for property graph");
-			break;
 		default:
 			elog(ERROR, "unrecognized GrantStmt.objtype: %d",
 				 (int) stmt->objtype);
@@ -604,7 +597,6 @@ ExecGrantStmt_oids(InternalGrant *istmt)
 	{
 		case OBJECT_TABLE:
 		case OBJECT_SEQUENCE:
-		case OBJECT_PROPGRAPH:
 			ExecGrant_Relation(istmt);
 			break;
 		case OBJECT_DATABASE:
@@ -700,7 +692,6 @@ objectNamesToOids(ObjectType objtype, List *objnames, bool is_grant)
 			}
 			break;
 		case OBJECT_DOMAIN:
-		case OBJECT_PROPGRAPH:
 		case OBJECT_TYPE:
 			foreach(cell, objnames)
 			{
@@ -889,10 +880,6 @@ objectsInSchemaToOids(ObjectType objtype, List *nspnames)
 				break;
 			case OBJECT_SEQUENCE:
 				objs = getRelationsInNamespace(namespaceId, RELKIND_SEQUENCE);
-				objects = list_concat(objects, objs);
-				break;
-			case OBJECT_PROPGRAPH:
-				objs = getRelationsInNamespace(namespaceId, RELKIND_PROPGRAPH);
 				objects = list_concat(objects, objs);
 				break;
 			case OBJECT_FUNCTION:
@@ -1099,10 +1086,6 @@ ExecAlterDefaultPrivilegesStmt(ParseState *pstate, AlterDefaultPrivilegesStmt *s
 		case OBJECT_SCHEMA:
 			all_privileges = ACL_ALL_RIGHTS_SCHEMA;
 			errormsg = gettext_noop("invalid privilege type %s for schema");
-			break;
-		case OBJECT_PROPGRAPH:
-			all_privileges = ACL_ALL_RIGHTS_PROPGRAPH;
-			errormsg = gettext_noop("invalid privilege type %s for property graph");
 			break;
 		default:
 			elog(ERROR, "unrecognized GrantStmt.objtype: %d",
@@ -1935,20 +1918,11 @@ ExecGrant_Relation(InternalGrant *istmt)
 					 errmsg("\"%s\" is not a sequence",
 							NameStr(pg_class_tuple->relname))));
 
-		if (istmt->objtype == OBJECT_PROPGRAPH &&
-			pg_class_tuple->relkind != RELKIND_PROPGRAPH)
-			ereport(ERROR,
-					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-					 errmsg("\"%s\" is not a property graph",
-							NameStr(pg_class_tuple->relname))));
-
 		/* Adjust the default permissions based on object type */
 		if (istmt->all_privs && istmt->privileges == ACL_NO_RIGHTS)
 		{
 			if (pg_class_tuple->relkind == RELKIND_SEQUENCE)
 				this_privileges = ACL_ALL_RIGHTS_SEQUENCE;
-			else if (pg_class_tuple->relkind == RELKIND_PROPGRAPH)
-				this_privileges = ACL_ALL_RIGHTS_PROPGRAPH;
 			else
 				this_privileges = ACL_ALL_RIGHTS_RELATION;
 		}
@@ -2041,9 +2015,6 @@ ExecGrant_Relation(InternalGrant *istmt)
 			{
 				case RELKIND_SEQUENCE:
 					old_acl = acldefault(OBJECT_SEQUENCE, ownerId);
-					break;
-				case RELKIND_PROPGRAPH:
-					old_acl = acldefault(OBJECT_PROPGRAPH, ownerId);
 					break;
 				default:
 					old_acl = acldefault(OBJECT_TABLE, ownerId);
@@ -3075,7 +3046,6 @@ ExecGrant_Largeobject(InternalGrant *istmt)
 		 * We need the members of both old and new ACLs so we can correct the
 		 * shared dependency information.
 		 */
-		case OBJECT_PROPGRAPH:
 		nnewmembers = aclmembers(new_acl, &newmembers);
 
 		/* finished building new ACL value, now insert it */
@@ -4004,9 +3974,6 @@ aclcheck_error(AclResult aclerr, ObjectType objtype,
 					case OBJECT_PROCEDURE:
 						msg = gettext_noop("permission denied for procedure %s");
 						break;
-					case OBJECT_PROPGRAPH:
-						msg = gettext_noop("permission denied for property graph %s");
-						break;
 					case OBJECT_PUBLICATION:
 						msg = gettext_noop("permission denied for publication %s");
 						break;
@@ -4141,9 +4108,6 @@ aclcheck_error(AclResult aclerr, ObjectType objtype,
 						break;
 					case OBJECT_PROCEDURE:
 						msg = gettext_noop("must be owner of procedure %s");
-						break;
-					case OBJECT_PROPGRAPH:
-						msg = gettext_noop("must be owner of property graph %s");
 						break;
 					case OBJECT_PUBLICATION:
 						msg = gettext_noop("must be owner of publication %s");
