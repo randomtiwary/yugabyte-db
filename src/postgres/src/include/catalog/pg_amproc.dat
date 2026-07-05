@@ -2195,4 +2195,9 @@
   amprocrighttype => 'anymultirange', amprocnum => '1',
   amproc => 'multirange_cmp' },
 
+{ amprocfamily => 'bloom/integer_ops', amproclefttype => 'int4',
+  amprocrighttype => 'int4', amprocnum => '1', amproc => 'hashint4' },
+{ amprocfamily => 'bloom/text_ops', amproclefttype => 'text',
+  amprocrighttype => 'text', amprocnum => '1', amproc => 'hashtext' },
+
 ]
