@@ -4189,4 +4189,13 @@
   amoprighttype => 'anymultirange', amopstrategy => '5',
   amopopr => '>(anymultirange,anymultirange)', amopmethod => 'lsm' },
 
+
+# bloom opclasses
+{ amopfamily => 'bloom/integer_ops', amoplefttype => 'int4',
+  amoprighttype => 'int4', amopstrategy => '1', amopopr => '=(int4,int4)',
+  amopmethod => 'bloom' },
+{ amopfamily => 'bloom/text_ops', amoplefttype => 'text',
+  amoprighttype => 'text', amopstrategy => '1', amopopr => '=(text,text)',
+  amopmethod => 'bloom' },
+
 ]
