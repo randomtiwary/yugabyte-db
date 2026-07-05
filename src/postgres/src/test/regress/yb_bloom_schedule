@@ -1,0 +1,6 @@
+# src/test/regress/yb_bloom_schedule
+#
+################################################################################
+# YB Bloom Testsuite: built-in bloom index access method tests.
+################################################################################
+test: yb.orig.bloom
