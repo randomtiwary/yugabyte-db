@@ -427,6 +427,270 @@ static relopt_int intRelOpts[] =
 	},
 	{
 		{
+			"length",
+			"Length of signature in bits",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 80, 1, 4096
+	},
+	{
+		{
+			"col1",
+			"Number of bits generated for index column 1",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col2",
+			"Number of bits generated for index column 2",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col3",
+			"Number of bits generated for index column 3",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col4",
+			"Number of bits generated for index column 4",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col5",
+			"Number of bits generated for index column 5",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col6",
+			"Number of bits generated for index column 6",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col7",
+			"Number of bits generated for index column 7",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col8",
+			"Number of bits generated for index column 8",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col9",
+			"Number of bits generated for index column 9",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col10",
+			"Number of bits generated for index column 10",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col11",
+			"Number of bits generated for index column 11",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col12",
+			"Number of bits generated for index column 12",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col13",
+			"Number of bits generated for index column 13",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col14",
+			"Number of bits generated for index column 14",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col15",
+			"Number of bits generated for index column 15",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col16",
+			"Number of bits generated for index column 16",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col17",
+			"Number of bits generated for index column 17",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col18",
+			"Number of bits generated for index column 18",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col19",
+			"Number of bits generated for index column 19",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col20",
+			"Number of bits generated for index column 20",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col21",
+			"Number of bits generated for index column 21",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col22",
+			"Number of bits generated for index column 22",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col23",
+			"Number of bits generated for index column 23",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col24",
+			"Number of bits generated for index column 24",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col25",
+			"Number of bits generated for index column 25",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col26",
+			"Number of bits generated for index column 26",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col27",
+			"Number of bits generated for index column 27",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col28",
+			"Number of bits generated for index column 28",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col29",
+			"Number of bits generated for index column 29",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col30",
+			"Number of bits generated for index column 30",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col31",
+			"Number of bits generated for index column 31",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
+			"col32",
+			"Number of bits generated for index column 32",
+			RELOPT_KIND_BLOOM,
+			AccessExclusiveLock
+		}, 2, 1, 4095
+	},
+	{
+		{
 			"gin_pending_list_limit",
 			"Maximum size of the pending list for this GIN index, in kilobytes.",
 			RELOPT_KIND_GIN,
