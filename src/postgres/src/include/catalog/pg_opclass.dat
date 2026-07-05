@@ -604,4 +604,12 @@
   opcfamily => 'gin/jsonb_path_ops', opcintype => 'jsonb', opcdefault => 'f',
   opckeytype => 'int4' },
 
+
+{ oid => '8504', oid_symbol => 'INT4_YBBLOOM_OPS_OID',
+  opcmethod => 'bloom', opcname => 'int4_ops',
+  opcfamily => 'bloom/integer_ops', opcintype => 'int4', opckeytype => 'bytea' },
+{ oid => '8505', oid_symbol => 'TEXT_YBBLOOM_OPS_OID',
+  opcmethod => 'bloom', opcname => 'text_ops',
+  opcfamily => 'bloom/text_ops', opcintype => 'text', opckeytype => 'bytea' },
+
 ]

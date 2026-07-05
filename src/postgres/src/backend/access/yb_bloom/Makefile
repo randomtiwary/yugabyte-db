@@ -1,0 +1,12 @@
+subdir = src/backend/access/yb_bloom
+top_builddir = ../../../..
+include $(top_builddir)/src/Makefile.global
+OBJS = \
+	yb_bloom.o \
+	yb_bloom_cost.o \
+	yb_bloom_scan.o \
+	yb_bloom_util.o \
+	yb_bloom_validate.o \
+	yb_bloom_vacuum.o \
+	yb_bloom_write.o
+include $(top_srcdir)/src/backend/common.mk
