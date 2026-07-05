@@ -1,0 +1,299 @@
+--
+-- Yugabyte-owned tests for the built-in bloom signature index access method (not contrib).
+-- Bloom uses local storage, so indexes are created on temporary tables.
+--
+SET enable_seqscan = off;
+SET enable_bitmapscan = on;
+SET enable_indexscan = on;
+--
+-- Index creation
+--
+CREATE TEMP TABLE bloom_tst (
+    i int4,
+    t text,
+    j int4
+);
+INSERT INTO bloom_tst
+SELECT i % 10, substr(md5(i::text), 1, 1), i % 7
+FROM generate_series(1, 2000) i;
+CREATE INDEX bloomidx ON bloom_tst USING bloom (i, t) WITH (col1 = 3);
+ALTER INDEX bloomidx SET (length = 80);
+SELECT am.amname, opc.opcname
+FROM pg_class c
+JOIN pg_am am ON am.oid = c.relam
+JOIN pg_index i ON i.indexrelid = c.oid
+JOIN pg_opclass opc ON opc.oid = ANY (i.indclass)
+WHERE c.relname = 'bloomidx'
+ORDER BY opc.opcname;
+ amname | opcname  
+--------+----------
+ bloom  | int4_ops
+ bloom  | text_ops
+(2 rows)
+
+--
+-- Query plans use the bloom index (bitmap scan with recheck)
+--
+EXPLAIN (COSTS OFF) SELECT count(*) FROM bloom_tst WHERE i = 7;
+                    QUERY PLAN                     
+---------------------------------------------------
+ Aggregate
+   ->  Bitmap Heap Scan on bloom_tst
+         Recheck Cond: (i = 7)
+         ->  Bitmap Index Scan on bloomidx
+               Index Cond: (i = 7)
+(5 rows)
+
+EXPLAIN (COSTS OFF) SELECT count(*) FROM bloom_tst WHERE t = '5';
+                    QUERY PLAN                     
+---------------------------------------------------
+ Aggregate
+   ->  Bitmap Heap Scan on bloom_tst
+         Recheck Cond: (t = '5'::text)
+         ->  Bitmap Index Scan on bloomidx
+               Index Cond: (t = '5'::text)
+(5 rows)
+
+EXPLAIN (COSTS OFF) SELECT count(*) FROM bloom_tst WHERE i = 7 AND t = '5';
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Aggregate
+   ->  Bitmap Heap Scan on bloom_tst
+         Recheck Cond: ((i = 7) AND (t = '5'::text))
+         ->  Bitmap Index Scan on bloomidx
+               Index Cond: ((i = 7) AND (t = '5'::text))
+(5 rows)
+
+SELECT count(*) FROM bloom_tst WHERE i = 7;
+ count 
+-------
+    200
+(1 row)
+
+SELECT count(*) FROM bloom_tst WHERE t = '5';
+ count 
+-------
+    112
+(1 row)
+
+SELECT count(*) FROM bloom_tst WHERE i = 7 AND t = '5';
+ count 
+-------
+     13
+(1 row)
+
+--
+-- False positives are filtered by heap recheck
+-- Use a tiny signature so the index is likelier to return spurious TIDs.
+-- Result counts must still match seqscan (recheck removes false positives).
+--
+CREATE TEMP TABLE bloom_fp (
+    id int,
+    a int4,
+    b text
+);
+INSERT INTO bloom_fp
+SELECT g, g % 50, substr(md5(g::text), 1, 1)
+FROM generate_series(1, 1000) g;
+CREATE INDEX bloom_fp_idx ON bloom_fp USING bloom (a, b)
+    WITH (length = 16, col1 = 1, col2 = 1);
+SET enable_seqscan = on;
+SELECT count(*) AS seq_count FROM bloom_fp WHERE a = 3 AND b = 'c';
+ seq_count 
+-----------
+          1
+(1 row)
+
+SET enable_seqscan = off;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM bloom_fp WHERE a = 3 AND b = 'c';
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Aggregate
+   ->  Bitmap Heap Scan on bloom_fp
+         Recheck Cond: ((a = 3) AND (b = 'c'::text))
+         ->  Bitmap Index Scan on bloom_fp_idx
+               Index Cond: ((a = 3) AND (b = 'c'::text))
+(5 rows)
+
+SELECT count(*) AS idx_count FROM bloom_fp WHERE a = 3 AND b = 'c';
+ idx_count 
+-----------
+          1
+(1 row)
+
+-- Spot-check row identity agrees with a filter that seqscan would apply.
+SELECT id FROM bloom_fp WHERE a = 3 AND b = 'c' ORDER BY id;
+ id  
+------
+  253
+(1 row)
+
+--
+-- Multi-column filtering
+--
+CREATE TEMP TABLE bloom_mc (
+    c1 int4,
+    c2 text,
+    c3 int4
+);
+INSERT INTO bloom_mc VALUES
+    (1, 'a', 10),
+    (1, 'b', 20),
+    (2, 'a', 10),
+    (2, 'b', 20),
+    (3, 'c', 30);
+CREATE INDEX bloom_mc_idx ON bloom_mc USING bloom (c1, c2, c3);
+EXPLAIN (COSTS OFF)
+SELECT * FROM bloom_mc WHERE c1 = 1 AND c2 = 'a' AND c3 = 10;
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Bitmap Heap Scan on bloom_mc
+   Recheck Cond: ((c1 = 1) AND (c2 = 'a'::text) AND (c3 = 10))
+   ->  Bitmap Index Scan on bloom_mc_idx
+         Index Cond: ((c1 = 1) AND (c2 = 'a'::text) AND (c3 = 10))
+(4 rows)
+
+SELECT * FROM bloom_mc WHERE c1 = 1 AND c2 = 'a' AND c3 = 10;
+ c1 | c2 | c3 
+----+----+----
+  1 | a  | 10
+(1 row)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM bloom_mc WHERE c1 = 2 AND c2 = 'b';
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Bitmap Heap Scan on bloom_mc
+   Recheck Cond: ((c1 = 2) AND (c2 = 'b'::text))
+   ->  Bitmap Index Scan on bloom_mc_idx
+         Index Cond: ((c1 = 2) AND (c2 = 'b'::text))
+(4 rows)
+
+SELECT * FROM bloom_mc WHERE c1 = 2 AND c2 = 'b' ORDER BY c3;
+ c1 | c2 | c3 
+----+----+----
+  2 | b  | 20
+(1 row)
+
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM bloom_mc WHERE c2 = 'a';
+                    QUERY PLAN                     
+---------------------------------------------------
+ Aggregate
+   ->  Bitmap Heap Scan on bloom_mc
+         Recheck Cond: (c2 = 'a'::text)
+         ->  Bitmap Index Scan on bloom_mc_idx
+               Index Cond: (c2 = 'a'::text)
+(5 rows)
+
+SELECT count(*) FROM bloom_mc WHERE c2 = 'a';
+ count 
+-------
+      2
+(1 row)
+
+--
+-- VACUUM / REINDEX must not corrupt the index
+--
+DELETE FROM bloom_tst WHERE i > 1 OR t = '5';
+VACUUM bloom_tst;
+INSERT INTO bloom_tst
+SELECT i % 10, substr(md5(i::text), 1, 1), i % 7
+FROM generate_series(1, 2000) i;
+SELECT count(*) FROM bloom_tst WHERE i = 7;
+ count 
+-------
+    200
+(1 row)
+
+SELECT count(*) FROM bloom_tst WHERE t = '5';
+ count 
+-------
+    112
+(1 row)
+
+SELECT count(*) FROM bloom_tst WHERE i = 7 AND t = '5';
+ count 
+-------
+     13
+(1 row)
+
+REINDEX INDEX bloomidx;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM bloom_tst WHERE i = 7 AND t = '5';
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Aggregate
+   ->  Bitmap Heap Scan on bloom_tst
+         Recheck Cond: ((i = 7) AND (t = '5'::text))
+         ->  Bitmap Index Scan on bloomidx
+               Index Cond: ((i = 7) AND (t = '5'::text))
+(5 rows)
+
+SELECT count(*) FROM bloom_tst WHERE i = 7;
+ count 
+-------
+    200
+(1 row)
+
+SELECT count(*) FROM bloom_tst WHERE t = '5';
+ count 
+-------
+    112
+(1 row)
+
+SELECT count(*) FROM bloom_tst WHERE i = 7 AND t = '5';
+ count 
+-------
+     13
+(1 row)
+
+VACUUM FULL bloom_tst;
+SELECT count(*) FROM bloom_tst WHERE i = 7;
+ count 
+-------
+    200
+(1 row)
+
+SELECT count(*) FROM bloom_tst WHERE t = '5';
+ count 
+-------
+    112
+(1 row)
+
+SELECT count(*) FROM bloom_tst WHERE i = 7 AND t = '5';
+ count 
+-------
+     13
+(1 row)
+
+-- Validate opclasses
+SELECT opcname, amvalidate(opc.oid)
+FROM pg_opclass opc
+JOIN pg_am am ON am.oid = opc.opcmethod
+WHERE amname = 'bloom'
+ORDER BY 1;
+ opcname  | amvalidate 
+----------+------------
+ int4_ops | t
+ text_ops | t
+(2 rows)
+
+-- Reloptions bounds
+\set VERBOSITY terse
+CREATE INDEX bloom_bad ON bloom_tst USING bloom (i, t) WITH (length = 0);
+ERROR:  value 0 out of bounds for option "length"
+CREATE INDEX bloom_bad ON bloom_tst USING bloom (i, t) WITH (col1 = 0);
+ERROR:  value 0 out of bounds for option "col1"
+\set VERBOSITY default
+--
+-- Not supported on YB storage relations
+--
+CREATE TABLE bloom_perm (i int4, t text);
+CREATE INDEX ON bloom_perm USING bloom (i, t);
+ERROR:  index method "bloom" not supported yet
+HINT:  See https://github.com/yugabyte/yugabyte-db/issues/1337. React with thumbs up to raise its priority
+DROP TABLE bloom_perm;
+DISCARD TEMP;
+RESET enable_seqscan;
+RESET enable_bitmapscan;
+RESET enable_indexscan;
