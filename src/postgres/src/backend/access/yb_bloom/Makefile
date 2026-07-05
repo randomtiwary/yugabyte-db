@@ -16,6 +16,7 @@ OBJS = \
 	yb_bloom.o \
 	yb_bloom_util.o \
 	yb_bloom_write.o \
+	yb_bloom_scan.o \
 	yb_bloom_stubs.o
 
 include $(top_srcdir)/src/backend/common.mk
