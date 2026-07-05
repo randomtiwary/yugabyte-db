@@ -1,16 +1,7 @@
-/* Temporary stubs removed in later commits as real files land. */
 #include "postgres.h"
 #include "access/bloomam.h"
 
-void BloomAmInitState(BloomAmState *state, Relation index)
-{ elog(ERROR, "bloom index is not fully initialized"); }
-void BloomAmSignValue(BloomAmState *state, BloomSigWord *sign, Datum value, int attno) {}
-BloomAmTuple BloomAmFormTuple(BloomAmState *state, ItemPointer iptr, Datum *values, bool *isnull)
-{ return NULL; }
-bool BloomAmPageAddItem(BloomAmState *state, Page page, BloomAmTuple tuple)
-{ return false; }
 bool bloomamvalidate(Oid opclassoid) { return true; }
-bytea *bloomamoptions(Datum reloptions, bool validate) { return NULL; }
 IndexBuildResult *bloomambuild(Relation heap, Relation index, struct IndexInfo *indexInfo)
 { elog(ERROR, "bloomambuild stub"); return NULL; }
 void bloomambuildempty(Relation index) { BloomAmInitMetapage(index); }
@@ -32,9 +23,6 @@ void bloomamcostestimate(PlannerInfo *root, IndexPath *path, double loop_count,
 	Cost *indexStartupCost, Cost *indexTotalCost, Selectivity *indexSelectivity,
 	double *indexCorrelation, double *indexPages)
 {
-	*indexStartupCost = 0;
-	*indexTotalCost = 1;
-	*indexSelectivity = 0.01;
-	*indexCorrelation = 0;
-	*indexPages = 1;
+	*indexStartupCost = 0; *indexTotalCost = 1; *indexSelectivity = 0.01;
+	*indexCorrelation = 0; *indexPages = 1;
 }

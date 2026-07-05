@@ -15,6 +15,7 @@ include $(top_builddir)/src/Makefile.global
 OBJS = \
 	bloomam.o \
 	bloom_page.o \
+	bloom_util.o \
 	bloom_stubs.o
 
 include $(top_srcdir)/src/backend/common.mk
