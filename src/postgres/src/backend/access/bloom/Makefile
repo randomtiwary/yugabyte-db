@@ -14,10 +14,12 @@ include $(top_builddir)/src/Makefile.global
 
 OBJS = \
 	bloomam.o \
-	bloom_page.o \
-	bloom_util.o \
+	bloom_cost.o \
 	bloom_insert.o \
+	bloom_page.o \
 	bloom_scan.o \
-	bloom_stubs.o
+	bloom_util.o \
+	bloom_vacuum.o \
+	bloom_validate.o
 
 include $(top_srcdir)/src/backend/common.mk
