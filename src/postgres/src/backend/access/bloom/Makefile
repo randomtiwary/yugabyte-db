@@ -16,6 +16,7 @@ OBJS = \
 	bloomam.o \
 	bloom_page.o \
 	bloom_util.o \
+	bloom_insert.o \
 	bloom_stubs.o
 
 include $(top_srcdir)/src/backend/common.mk

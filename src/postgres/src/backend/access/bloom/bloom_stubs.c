@@ -2,12 +2,6 @@
 #include "access/bloomam.h"
 
 bool bloomamvalidate(Oid opclassoid) { return true; }
-IndexBuildResult *bloomambuild(Relation heap, Relation index, struct IndexInfo *indexInfo)
-{ elog(ERROR, "bloomambuild stub"); return NULL; }
-void bloomambuildempty(Relation index) { BloomAmInitMetapage(index); }
-bool bloomaminsert(Relation index, Datum *values, bool *isnull, ItemPointer ht_ctid,
-	Relation heapRel, IndexUniqueCheck checkUnique, bool indexUnchanged,
-	struct IndexInfo *indexInfo) { elog(ERROR, "bloomaminsert stub"); return false; }
 IndexScanDesc bloomambeginscan(Relation r, int nkeys, int norderbys)
 { elog(ERROR, "bloomambeginscan stub"); return NULL; }
 void bloomamrescan(IndexScanDesc scan, ScanKey scankey, int nscankeys,
