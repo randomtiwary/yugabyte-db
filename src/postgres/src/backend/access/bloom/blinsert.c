@@ -6,7 +6,7 @@
  * Copyright (c) 2016-2022, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
- *	  contrib/bloom/blinsert.c
+ *	  src/backend/access/bloom/blinsert.c
  *
  *-------------------------------------------------------------------------
  */
@@ -15,7 +15,7 @@
 #include "access/genam.h"
 #include "access/generic_xlog.h"
 #include "access/tableam.h"
-#include "bloom.h"
+#include "access/bloom.h"
 #include "catalog/index.h"
 #include "miscadmin.h"
 #include "storage/bufmgr.h"

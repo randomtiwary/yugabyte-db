@@ -6,7 +6,7 @@
  * Copyright (c) 2016-2022, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
- *	  contrib/bloom/bloom.h
+ *	  src/include/access/bloom.h
  *
  *-------------------------------------------------------------------------
  */

@@ -6,13 +6,13 @@
  * Copyright (c) 2016-2022, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
- *	  contrib/bloom/blcost.c
+ *	  src/backend/access/bloom/blcost.c
  *
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
 
-#include "bloom.h"
+#include "access/bloom.h"
 #include "fmgr.h"
 #include "utils/selfuncs.h"
 

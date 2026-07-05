@@ -6,14 +6,14 @@
  * Copyright (c) 2016-2022, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
- *	  contrib/bloom/blvacuum.c
+ *	  src/backend/access/bloom/blvacuum.c
  *
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
 
 #include "access/genam.h"
-#include "bloom.h"
+#include "access/bloom.h"
 #include "catalog/storage.h"
 #include "commands/vacuum.h"
 #include "miscadmin.h"

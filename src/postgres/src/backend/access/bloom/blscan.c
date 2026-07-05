@@ -6,14 +6,14 @@
  * Copyright (c) 2016-2022, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
- *	  contrib/bloom/blscan.c
+ *	  src/backend/access/bloom/blscan.c
  *
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
 
 #include "access/relscan.h"
-#include "bloom.h"
+#include "access/bloom.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "storage/bufmgr.h"

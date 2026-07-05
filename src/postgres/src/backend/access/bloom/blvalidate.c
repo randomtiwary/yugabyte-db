@@ -6,7 +6,7 @@
  * Copyright (c) 2016-2022, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
- *	  contrib/bloom/blvalidate.c
+ *	  src/backend/access/bloom/blvalidate.c
  *
  *-------------------------------------------------------------------------
  */
@@ -14,7 +14,7 @@
 
 #include "access/amvalidate.h"
 #include "access/htup_details.h"
-#include "bloom.h"
+#include "access/bloom.h"
 #include "catalog/pg_amop.h"
 #include "catalog/pg_amproc.h"
 #include "catalog/pg_opclass.h"

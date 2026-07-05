@@ -7,7 +7,7 @@
  * Portions Copyright (c) 1990-1993, Regents of the University of California
  *
  * IDENTIFICATION
- *	  contrib/bloom/blutils.c
+ *	  src/backend/access/bloom/blutils.c
  *
  *-------------------------------------------------------------------------
  */
@@ -16,7 +16,7 @@
 #include "access/amapi.h"
 #include "access/generic_xlog.h"
 #include "access/reloptions.h"
-#include "bloom.h"
+#include "access/bloom.h"
 #include "catalog/index.h"
 #include "commands/vacuum.h"
 #include "miscadmin.h"
