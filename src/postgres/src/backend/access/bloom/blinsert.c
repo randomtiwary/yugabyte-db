@@ -24,8 +24,6 @@
 #include "utils/memutils.h"
 #include "utils/rel.h"
 
-PG_MODULE_MAGIC;
-
 /*
  * State of bloom index build.  We accumulate one page data here before
  * flushing it to buffer manager.

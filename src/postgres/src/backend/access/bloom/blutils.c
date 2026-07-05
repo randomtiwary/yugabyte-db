@@ -32,31 +32,31 @@
 #define SETBIT(x,i)   GETWORD(x,i) |=  ( 0x01 << ( (i) % SIGNWORDBITS ) )
 #define GETBIT(x,i) ( (GETWORD(x,i) >> ( (i) % SIGNWORDBITS )) & 0x01 )
 
-PG_FUNCTION_INFO_V1(blhandler);
-
-/* Kind of relation options for bloom index */
-static relopt_kind bl_relopt_kind;
-
-/* parse table for fillRelOptions */
+static relopt_kind bl_relopt_kind = (relopt_kind) 0;
 static relopt_parse_elt bl_relopt_tab[INDEX_MAX_KEYS + 1];
+static bool bl_relopts_initialized = false;
 
 static int32 myRand(void);
 static void mySrand(uint32 seed);
 
 /*
- * Module initialize function: initialize info about Bloom relation options.
+ * Initialize Bloom reloptions on first use.
  *
- * Note: keep this in sync with makeDefaultBloomOptions().
+ * Built-in AMs usually register options in reloptions.c, but bloom needs one
+ * option per index column (col1..colN). Register them lazily via
+ * add_reloption_kind() so we avoid a large static table.
  */
-void
-_PG_init(void)
+static void
+initialize_bloom_reloptions(void)
 {
 	int			i;
 	char		buf[16];
 
+	if (bl_relopts_initialized)
+		return;
+
 	bl_relopt_kind = add_reloption_kind();
 
-	/* Option for length of signature */
 	add_int_reloption(bl_relopt_kind, "length",
 					  "Length of signature in bits",
 					  DEFAULT_BLOOM_LENGTH, 1, MAX_BLOOM_LENGTH,
@@ -65,7 +65,6 @@ _PG_init(void)
 	bl_relopt_tab[0].opttype = RELOPT_TYPE_INT;
 	bl_relopt_tab[0].offset = offsetof(BloomOptions, bloomLength);
 
-	/* Number of bits for each possible index column: col1, col2, ... */
 	for (i = 0; i < INDEX_MAX_KEYS; i++)
 	{
 		snprintf(buf, sizeof(buf), "col%d", i + 1);
@@ -78,6 +77,8 @@ _PG_init(void)
 		bl_relopt_tab[i + 1].opttype = RELOPT_TYPE_INT;
 		bl_relopt_tab[i + 1].offset = offsetof(BloomOptions, bitSize[0]) + sizeof(int) * i;
 	}
+
+	bl_relopts_initialized = true;
 }
 
 /*
@@ -150,6 +151,17 @@ blhandler(PG_FUNCTION_ARGS)
 	amroutine->amestimateparallelscan = NULL;
 	amroutine->aminitparallelscan = NULL;
 	amroutine->amparallelrescan = NULL;
+
+	/* YB: local-storage AM, supported on temp relations only. */
+	amroutine->yb_amisforybrelation = false;
+	amroutine->yb_amiscopartitioned = false;
+	amroutine->yb_aminsert = NULL;
+	amroutine->yb_amdelete = NULL;
+	amroutine->yb_amupdate = NULL;
+	amroutine->yb_ambackfill = NULL;
+	amroutine->yb_ammightrecheck = NULL;
+	amroutine->yb_amgetbitmap = NULL;
+	amroutine->yb_ambindschema = NULL;
 
 	PG_RETURN_POINTER(amroutine);
 }
@@ -481,6 +493,8 @@ bytea *
 bloptions(Datum reloptions, bool validate)
 {
 	BloomOptions *rdopts;
+
+	initialize_bloom_reloptions();
 
 	/* Parse the user-given reloptions */
 	rdopts = (BloomOptions *) build_reloptions(reloptions, validate,
