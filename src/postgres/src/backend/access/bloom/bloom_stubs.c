@@ -2,12 +2,6 @@
 #include "access/bloomam.h"
 
 bool bloomamvalidate(Oid opclassoid) { return true; }
-IndexScanDesc bloomambeginscan(Relation r, int nkeys, int norderbys)
-{ elog(ERROR, "bloomambeginscan stub"); return NULL; }
-void bloomamrescan(IndexScanDesc scan, ScanKey scankey, int nscankeys,
-	ScanKey orderbys, int norderbys) {}
-int64 bloomamgetbitmap(IndexScanDesc scan, TIDBitmap *tbm) { return 0; }
-void bloomamendscan(IndexScanDesc scan) {}
 IndexBulkDeleteResult *bloomambulkdelete(IndexVacuumInfo *info,
 	IndexBulkDeleteResult *stats, IndexBulkDeleteCallback callback, void *callback_state)
 { return stats; }
