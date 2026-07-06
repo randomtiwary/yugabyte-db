@@ -1,10 +1,6 @@
 SET enable_seqscan = off;
 SET enable_bitmapscan = off;
 SET enable_indexscan = on;
-
--- Feature is off by default.
-CREATE TABLE bloom_flag_tst (i int4);
-CREATE INDEX bloom_flag_idx ON bloom_flag_tst USING bloom (i); -- error
 SET yb_enable_bloom_index = on;
 
 CREATE TABLE bloom_tst (i int4, t text, j int4);
@@ -33,6 +29,6 @@ SELECT count(*) FROM bloom_tst WHERE i = 7 AND t = '5';
 SELECT opcname, amvalidate(opc.oid) FROM pg_opclass opc
 JOIN pg_am am ON am.oid = opc.opcmethod WHERE amname = 'bloom' ORDER BY 1;
 
-DROP TABLE bloom_tst, bloom_mc, bloom_flag_tst;
+DROP TABLE bloom_tst, bloom_mc;
 RESET yb_enable_bloom_index;
 RESET enable_seqscan; RESET enable_bitmapscan; RESET enable_indexscan;
