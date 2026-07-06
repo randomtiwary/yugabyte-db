@@ -303,6 +303,7 @@ extern PGDLLIMPORT bool trace_sort;
 
 /* YB */
 extern PGDLLIMPORT bool yb_enable_memory_tracking;
+extern PGDLLIMPORT bool yb_enable_bloom_index;
 extern PGDLLIMPORT int yb_bnl_batch_size;
 extern PGDLLIMPORT bool yb_bnl_optimize_first_batch;
 extern PGDLLIMPORT bool yb_bnl_enable_hashing;

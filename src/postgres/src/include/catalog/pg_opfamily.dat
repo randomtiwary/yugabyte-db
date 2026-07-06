@@ -380,4 +380,9 @@
 { oid => '9949',
   opfmethod => 'lsm', opfname => 'multirange_ops' },
 
+{ oid => '8502', oid_symbol => 'INTEGER_YBBLOOM_FAM_OID',
+  opfmethod => 'bloom', opfname => 'integer_ops' },
+{ oid => '8503', oid_symbol => 'TEXT_YBBLOOM_FAM_OID',
+  opfmethod => 'bloom', opfname => 'text_ops' },
+
 ]

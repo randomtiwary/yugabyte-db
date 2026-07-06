@@ -12359,4 +12359,10 @@
   proargmodes => '{i,i,i,o,o,o}',
   proargnames => '{hba_path,guc_path,ident_path,hba_error,guc_error,ident_error}',
   prosrc => 'yb_pg_validate_conf_file'},
+
+{ oid => '8501', descr => 'yb_bloom index access method handler',
+  proname => 'ybbloomhandler', provolatile => 'v',
+  prorettype => 'index_am_handler', proargtypes => 'internal',
+  prosrc => 'ybbloomhandler' },
+
 ]

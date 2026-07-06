@@ -1,0 +1,7 @@
+# src/test/regress/yb_bloom_schedule
+#
+################################################################################
+# YB bloom Testsuite: built-in DocDB-backed bloom index tests.
+################################################################################
+test: yb.orig.bloom_enable_flag
+test: yb.orig.bloom
