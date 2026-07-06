@@ -29,11 +29,18 @@
 #include "access/yb_scan.h"
 #include "pg_yb_utils.h"
 #include "pgstat.h"
+#include "utils/guc.h"
 
 IndexScanDesc
 ybbloombeginscan(Relation rel, int nkeys, int norderbys)
 {
 	IndexScanDesc scan;
+
+	if (!yb_enable_bloom_index)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("bloom indexes are not enabled"),
+				 errhint("Set yb_enable_bloom_index to on.")));
 
 	Assert(norderbys == 0);
 	scan = RelationGetIndexScan(rel, nkeys, norderbys);

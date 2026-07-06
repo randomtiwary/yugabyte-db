@@ -868,6 +868,7 @@ static char *recovery_target_lsn_string;
 static char *restrict_nonsystem_relation_kind_string;
 
 bool		yb_enable_memory_tracking = true;
+bool		yb_enable_bloom_index = false;
 bool		yb_enable_pg_subscription = false;
 static char *yb_effective_transaction_isolation_level_string;
 static char *yb_xcluster_consistency_level_string;
@@ -2681,6 +2682,17 @@ static struct config_bool ConfigureNamesBool[] =
 		},
 		&yb_enable_replication_commands,
 		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"yb_enable_bloom_index", PGC_SUSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable the built-in bloom index access method (CREATE INDEX ... USING bloom)."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&yb_enable_bloom_index,
+		false,
 		NULL, NULL, NULL
 	},
 

@@ -1,6 +1,11 @@
 SET enable_seqscan = off;
 SET enable_bitmapscan = off;
 SET enable_indexscan = on;
+CREATE TABLE bloom_flag_tst (i int4);
+CREATE INDEX bloom_flag_idx ON bloom_flag_tst USING bloom (i); -- error
+ERROR:  bloom indexes are not enabled
+HINT:  Set yb_enable_bloom_index to on.
+SET yb_enable_bloom_index = on;
 CREATE TABLE bloom_tst (i int4, t text, j int4);
 INSERT INTO bloom_tst SELECT i % 10, substr(md5(i::text), 1, 1), i % 7
 FROM generate_series(1, 2000) i;
@@ -69,5 +74,6 @@ JOIN pg_am am ON am.oid = opc.opcmethod WHERE amname = 'bloom' ORDER BY 1;
  text_ops | t
 (2 rows)
 
-DROP TABLE bloom_tst, bloom_mc;
+DROP TABLE bloom_tst, bloom_mc, bloom_flag_tst;
+RESET yb_enable_bloom_index;
 RESET enable_seqscan; RESET enable_bitmapscan; RESET enable_indexscan;
