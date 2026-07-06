@@ -1276,6 +1276,14 @@ DefineIndex(Oid relationId,
 	accessMethodId = accessMethodForm->oid;
 	amRoutine = GetIndexAmRoutine(accessMethodForm->amhandler);
 
+	/* YB: gate built-in bloom indexes behind yb_enable_bloom_index. */
+	if (IsYugaByteEnabled() && strcmp(accessMethodName, "bloom") == 0 &&
+		!yb_enable_bloom_index)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("bloom indexes are not enabled"),
+				 errhint("Set yb_enable_bloom_index to on.")));
+
 	if (IsYBRelation(rel) && !amRoutine->yb_amisforybrelation)
 		ereport(ERROR,
 				(errmsg("index method \"%s\" not supported yet",

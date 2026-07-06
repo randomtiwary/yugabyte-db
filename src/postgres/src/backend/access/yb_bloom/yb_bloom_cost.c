@@ -25,6 +25,8 @@
 #include "postgres.h"
 
 #include "access/yb_bloom.h"
+#include "optimizer/cost.h"
+#include "utils/guc.h"
 #include "utils/selfuncs.h"
 
 void
@@ -35,6 +37,16 @@ ybbloomcostestimate(struct PlannerInfo *root, struct IndexPath *path,
 {
 	IndexOptInfo *index = path->indexinfo;
 	GenericCosts costs;
+
+	if (!yb_enable_bloom_index)
+	{
+		*indexStartupCost = disable_cost;
+		*indexTotalCost = disable_cost;
+		*indexSelectivity = 0.0;
+		*indexCorrelation = 0.0;
+		*indexPages = 1.0;
+		return;
+	}
 
 	MemSet(&costs, 0, sizeof(costs));
 	costs.numIndexTuples = index->tuples;

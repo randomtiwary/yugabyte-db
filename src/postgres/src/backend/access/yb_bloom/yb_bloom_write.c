@@ -38,8 +38,19 @@
 #include "executor/ybModifyTable.h"
 #include "pg_yb_utils.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+
+static void
+YbCheckBloomIndexEnabled(void)
+{
+	if (!yb_enable_bloom_index)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("bloom indexes are not enabled"),
+				 errhint("Set yb_enable_bloom_index to on.")));
+}
 
 typedef struct
 {
@@ -160,6 +171,7 @@ ybbloombuild(Relation heap, Relation index, struct IndexInfo *indexInfo)
 	IndexBuildResult *result;
 	double		reltuples;
 
+	YbCheckBloomIndexEnabled();
 	memset(&buildstate, 0, sizeof(buildstate));
 	YbBloomInitState(&buildstate.state, index);
 	buildstate.tmpCtx = AllocSetContextCreate(CurrentMemoryContext,
@@ -196,6 +208,7 @@ ybbloombackfill(Relation heap, Relation index, struct IndexInfo *indexInfo,
 	IndexBuildResult *result;
 	double		reltuples;
 
+	YbCheckBloomIndexEnabled();
 	memset(&buildstate, 0, sizeof(buildstate));
 	YbBloomInitState(&buildstate.state, index);
 	buildstate.backfilltime = &bfinfo->read_time;
