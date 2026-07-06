@@ -14,7 +14,6 @@ include $(top_builddir)/src/Makefile.global
 
 OBJS = \
 	yb_bloom.o \
-	yb_bloom_util.o \
 	yb_bloom_stubs.o
 
 include $(top_srcdir)/src/backend/common.mk

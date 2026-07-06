@@ -1,5 +1,10 @@
 #include "postgres.h"
 #include "access/yb_bloom.h"
+void YbBloomInitState(YbBloomState *s, Relation i) { elog(ERROR, "stub"); }
+void YbBloomSignValue(YbBloomState *s, YbBloomSigWord *g, Datum v, int a) {}
+bytea *YbBloomFormSignature(YbBloomState *s, Datum *v, bool *n) { return NULL; }
+bool YbBloomSignatureMatch(bytea *s, YbBloomSigWord *q, int n) { return false; }
+bytea *ybbloomoptions(Datum r, bool v) { return NULL; }
 bool ybbloomvalidate(Oid o) { return true; }
 void ybbloomcostestimate(struct PlannerInfo *r, struct IndexPath *p, double l, Cost *a, Cost *b, Selectivity *c, double *d, double *e) { *a=*b=0; *c=0.01; *d=*e=0; }
 void ybbloombindschema(YbcPgStatement h, struct IndexInfo *i, TupleDesc t, int16 *c, Oid *o, Datum r) {}
