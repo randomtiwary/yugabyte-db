@@ -634,10 +634,6 @@ class CatalogManager : public CatalogManagerIf, public SnapshotCoordinatorContex
   std::optional<YsqlDdlVerificationState> TEST_GetYsqlDdlVerificationState(
       const TransactionId& txn_id) const EXCLUDES(ddl_txn_verifier_mutex_);
 
-  // Test-only: current TxnState for txn, or nullopt if not in the verifier map.
-  std::optional<TxnState> TEST_GetYsqlDdlTxnState(
-      const TransactionId& txn_id) const EXCLUDES(ddl_txn_verifier_mutex_);
-
   // Get the information about the specified table.
   Status GetTableSchema(const GetTableSchemaRequestPB* req,
                         GetTableSchemaResponsePB* resp) override;
