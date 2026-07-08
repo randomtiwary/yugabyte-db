@@ -4,10 +4,10 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
--- BEGIN; YB: Transactional DDL not supported
+-- BEGIN; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support
 SELECT set_config('search_path','partman, public',false);
 
-SELECT plan(132); -- YB: decreased number of tests
+SELECT plan(148); -- YB: decreased number of tests
 CREATE SCHEMA partman_test;
 CREATE SCHEMA partman_retention_test;
 CREATE ROLE partman_basic;
@@ -398,7 +398,6 @@ SELECT hasnt_table('partman_test', 'time_taptest_table_p'||to_char(date_trunc('c
 SELECT has_table('partman_retention_test', 'time_taptest_table_p'||to_char(date_trunc('century', CURRENT_TIMESTAMP)-'300 years'::interval, 'YYYY'), 
     'Check time_taptest_table_'||to_char(date_trunc('century', CURRENT_TIMESTAMP)-'300 years'::interval, 'YYYY')||' got moved to new schema');
 
-/* YB: undo_partition not supported
 SELECT undo_partition('partman_test.time_taptest_table', 20, p_target_table := 'partman_test.undo_taptest', p_keep_table := false);
 SELECT results_eq('SELECT count(*)::int FROM partman_test.undo_taptest', ARRAY[118], 'Check count from target table after undo');
 SELECT hasnt_table('partman_test', 'time_taptest_table_p'||to_char(date_trunc('century', CURRENT_TIMESTAMP), 'YYYY'), 
@@ -432,7 +431,6 @@ SELECT hasnt_table('partman_test', 'time_taptest_table_p'||to_char(date_trunc('c
 
 
 SELECT hasnt_table('partman_test', 'time_taptest_table_template', 'Check that template table was dropped');
-*/ -- YB
 
 SELECT * FROM finish();
--- ROLLBACK; YB: Transactional DDL not supported
+-- ROLLBACK; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support

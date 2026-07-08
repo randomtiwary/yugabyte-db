@@ -7,10 +7,10 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
--- BEGIN; YB: Transactional DDL not supported;
+-- BEGIN; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support
 SELECT set_config('search_path','partman, public',false);
 
-SELECT plan(250); -- YB: decreased number of tests
+SELECT plan(324); -- YB: decreased number of tests
 CREATE SCHEMA partman_test;
 
 CREATE TABLE partman_test.fk_test_reference (col2 text unique not null);
@@ -558,7 +558,6 @@ SELECT hasnt_table('partman_test', 'id_taptest_table_p60_p'||to_char(CURRENT_TIM
     'Check id_taptest_table_p60_p'||to_char(CURRENT_TIMESTAMP-'6 days'::interval, 'YYYY_MM_DD')||' does not exist');
 
 
-/* YB: undo_partition not supported
 SELECT undo_partition('partman_test.id_taptest_table_p10', 20, p_target_table := 'partman_test.undo_taptest', p_keep_table := false); 
 SELECT has_table('partman_test', 'template_id_taptest_table', 'Check that template table was not removed yet');
 SELECT undo_partition('partman_test.id_taptest_table_p20', 20, p_target_table := 'partman_test.undo_taptest', p_keep_table := false);
@@ -712,8 +711,7 @@ SELECT is_empty('SELECT parent_table from part_config where parent_table = ''par
 SELECT hasnt_table('partman_test', 'template_id_taptest_table', 'Check that template table was removed');
 
 SELECT results_eq('SELECT count(*)::int FROM ONLY partman_test.undo_taptest', ARRAY[11], 'Check count from final unpartitioned target table');
-*/ -- YB
 
 SELECT * FROM finish();
--- ROLLBACK; YB: Transactional DDL not supported
+-- ROLLBACK; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support
 

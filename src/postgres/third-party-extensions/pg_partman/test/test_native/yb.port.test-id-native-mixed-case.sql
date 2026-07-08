@@ -6,10 +6,10 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
--- BEGIN; YB: Transactional DDL not supported
+-- BEGIN; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support
 SELECT set_config('search_path','partman, public',false);
 
-SELECT plan(98); -- YB: decreased number of tests
+SELECT plan(111); -- YB: decreased number of tests
 CREATE SCHEMA "Partman_Test";
 CREATE SCHEMA "Partman_Retention_Test";
 CREATE ROLE "Partman_Basic";
@@ -206,7 +206,6 @@ SELECT drop_partition_id('Partman_Test.ID_Taptest_Table', p_retention_schema := 
 SELECT hasnt_table('Partman_Test', 'ID_Taptest_Table_p3000000010', 'Check ID_Taptest_Table_p3000000010 doesn''t exists anymore');
 SELECT has_table('Partman_Retention_Test', 'ID_Taptest_Table_p3000000010', 'Check ID_Taptest_Table_p3000000010 got moved to new schema');
 
-/* YB: undo_partition not supported
 SELECT undo_partition('Partman_Test.ID_Taptest_Table', p_target_table := 'Partman_Test.Undo_Taptest', p_keep_table := false);
 SELECT hasnt_table('Partman_Test', 'ID_Taptest_Table_p3000000020', 'Check ID_Taptest_Table_p3000000020 does not exist');
 
@@ -225,7 +224,6 @@ SELECT has_table('Partman_Test', 'ID_Taptest_Table_p3000000070', 'Check ID_Tapte
 SELECT is_empty('SELECT * FROM "Partman_Test"."ID_Taptest_Table_p3000000070"', 'Check child table had its data removed ID_Taptest_Table_p3000000070');
 
 SELECT hasnt_table('Partman_Test', 'template_id_taptest_table', 'Check that template table was dropped');
-*/ -- YB
 
 SELECT * FROM finish();
--- ROLLBACK; YB: Transactional DDL not supported
+-- ROLLBACK; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support

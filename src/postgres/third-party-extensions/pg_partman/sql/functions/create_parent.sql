@@ -75,7 +75,6 @@ v_top_parent_schema             text := split_part(p_parent_table, '.', 1);
 v_top_parent_table              text := split_part(p_parent_table, '.', 2);
 v_unlogged                      char;
 yb_v_parent_table_default       regclass;
-yb_v_enable_default_partition   boolean := false;
 yb_v_is_colocated_table         boolean := false;
 yb_v_schema_name                text;
 yb_v_table_name                 text;
@@ -746,10 +745,7 @@ IF v_control_type = 'id' AND p_epoch = 'none' THEN
 
 END IF; -- End IF id
 
-/* YB: Disable default partition creation.
- * TODO(#3109): Re-enable it after transactional DDL support.
- */
-IF yb_v_enable_default_partition AND p_type = 'native' AND current_setting('server_version_num')::int >= 110000 THEN
+IF p_type = 'native' AND current_setting('server_version_num')::int >= 110000 THEN
     -- Add default partition to native sets in PG11+
 
     v_default_partition := @extschema@.check_name_length(v_parent_tablename, '_default', FALSE);
