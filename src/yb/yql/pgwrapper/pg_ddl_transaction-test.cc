@@ -999,4 +999,42 @@ TEST_P(PgDdlSavepointMiniClusterTest, TestRollbackToSavepointWithSlowIndexDeleti
   ASSERT_OK(conn.Execute("DROP TABLE existing_table"));
 }
 
+// Rolling back both ALTER TABLE and CREATE INDEX on the same base table fires two concurrent
+// alter-table operations (schema restore + index removal). The second can advance the schema
+// version past the one the first registered a wait for; rollback must still complete.
+TEST_P(PgDdlSavepointMiniClusterTest, TestRollbackAlterAndCreateIndexConcurrently) {
+  auto conn = ASSERT_RESULT(Connect());
+
+  ASSERT_OK(conn.Execute("DROP TABLE IF EXISTS concurrent_alter_idx_rb"));
+  ASSERT_OK(conn.Execute("CREATE TABLE concurrent_alter_idx_rb (a INT, b INT)"));
+
+  // ROLLBACK TO SAVEPOINT path.
+  ASSERT_OK(conn.Execute("BEGIN"));
+  ASSERT_OK(conn.Execute("SAVEPOINT a"));
+  ASSERT_OK(conn.Execute("ALTER TABLE concurrent_alter_idx_rb ADD COLUMN c INT"));
+  ASSERT_OK(conn.Execute("CREATE INDEX concurrent_alter_idx_rb_idx ON concurrent_alter_idx_rb(b)"));
+  ASSERT_OK(conn.Execute("ROLLBACK TO SAVEPOINT a"));
+  auto col_count = ASSERT_RESULT(conn.FetchRow<PGUint64>(
+      "SELECT COUNT(*) FROM information_schema.columns "
+      "WHERE table_name = 'concurrent_alter_idx_rb'"));
+  ASSERT_EQ(col_count, 2);
+  auto idx_count = ASSERT_RESULT(conn.FetchRow<PGUint64>(
+      "SELECT COUNT(*) FROM pg_indexes WHERE tablename = 'concurrent_alter_idx_rb'"));
+  ASSERT_EQ(idx_count, 0);
+
+  // Full transaction ROLLBACK also walks nested subtransactions and must not time out.
+  ASSERT_OK(conn.Execute("ALTER TABLE concurrent_alter_idx_rb ADD COLUMN c INT"));
+  ASSERT_OK(conn.Execute("CREATE INDEX concurrent_alter_idx_rb_idx ON concurrent_alter_idx_rb(b)"));
+  ASSERT_OK(conn.Execute("ROLLBACK"));
+  col_count = ASSERT_RESULT(conn.FetchRow<PGUint64>(
+      "SELECT COUNT(*) FROM information_schema.columns "
+      "WHERE table_name = 'concurrent_alter_idx_rb'"));
+  ASSERT_EQ(col_count, 2);
+  idx_count = ASSERT_RESULT(conn.FetchRow<PGUint64>(
+      "SELECT COUNT(*) FROM pg_indexes WHERE tablename = 'concurrent_alter_idx_rb'"));
+  ASSERT_EQ(idx_count, 0);
+
+  ASSERT_OK(conn.Execute("DROP TABLE concurrent_alter_idx_rb"));
+}
+
 } // namespace yb::pgwrapper

@@ -42,6 +42,28 @@ ROLLBACK TO a;
 \di
 ROLLBACK;
 
+-- Concurrent ALTER TABLE + CREATE INDEX rollback must complete (not time out).
+-- Rolling back both triggers two alter-table operations on the base table
+-- (schema restore and index removal). The second can advance the schema version
+-- past the one the first registered a wait for; rollback must still finish.
+CREATE TABLE concurrent_alter_index_rb (a INT, b INT);
+BEGIN;
+SAVEPOINT a;
+ALTER TABLE concurrent_alter_index_rb ADD COLUMN c INT;
+CREATE INDEX concurrent_alter_index_rb_idx ON concurrent_alter_index_rb(b);
+ROLLBACK TO a;
+SELECT column_name FROM information_schema.columns
+  WHERE table_name = 'concurrent_alter_index_rb' ORDER BY column_name;
+SELECT indexname FROM pg_indexes WHERE tablename = 'concurrent_alter_index_rb';
+-- Full transaction ROLLBACK also walks nested subtransactions.
+ALTER TABLE concurrent_alter_index_rb ADD COLUMN c INT;
+CREATE INDEX concurrent_alter_index_rb_idx ON concurrent_alter_index_rb(b);
+ROLLBACK;
+SELECT column_name FROM information_schema.columns
+  WHERE table_name = 'concurrent_alter_index_rb' ORDER BY column_name;
+SELECT indexname FROM pg_indexes WHERE tablename = 'concurrent_alter_index_rb';
+DROP TABLE concurrent_alter_index_rb;
+
 -- Rollback of DROP + CREATE TABLE with the same name works.
 BEGIN;
 CREATE TABLE test_table (a INT, b INT);

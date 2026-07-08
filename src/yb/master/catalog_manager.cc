@@ -11972,8 +11972,14 @@ Status CatalogManager::HandleTabletSchemaVersionReport(
   RemoveDdlTransactionState(table->id(), table->EraseDdlTxnsWaitingForSchemaVersion(version));
 
   if (FLAGS_ysql_yb_enable_ddl_savepoint_support) {
-    RemoveDdlRollbackToSubTxnState(
-        table->id(), table->EraseDdlTxnForRollbackToSubTxnWaitingForSchemaVersion(version));
+    // Erase all subtxn-rollback waits for schema versions <= the reported version. A concurrent
+    // alter on the same table during the same rollback (e.g. CREATE INDEX rollback deleting the
+    // index while ALTER TABLE rollback restores the previous schema) can bump the version past
+    // the one we registered; tablets may only report the latest version.
+    for (const auto& txn_id :
+         table->EraseDdlTxnsForRollbackToSubTxnWaitingForSchemaVersion(version)) {
+      RemoveDdlRollbackToSubTxnState(table->id(), txn_id);
+    }
   }
 
   return MultiStageAlterTable::LaunchNextTableInfoVersionIfNecessary(

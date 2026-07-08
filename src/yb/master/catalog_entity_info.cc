@@ -1195,17 +1195,24 @@ void TableInfo::AddDdlTxnForRollbackToSubTxnWaitingForSchemaVersion(
                               << " previous transaction " << res.first->second;
 }
 
-TransactionId TableInfo::EraseDdlTxnForRollbackToSubTxnWaitingForSchemaVersion(
+std::vector<TransactionId> TableInfo::EraseDdlTxnsForRollbackToSubTxnWaitingForSchemaVersion(
     int schema_version) {
   std::lock_guard l(lock_);
-  TransactionId txn;
-
-  auto itr = ddl_txns_for_subtxn_rollback_waiting_for_schema_version_.find(schema_version);
-  if (itr != ddl_txns_for_subtxn_rollback_waiting_for_schema_version_.end()) {
-    txn = itr->second;
-    ddl_txns_for_subtxn_rollback_waiting_for_schema_version_.erase(itr);
+  std::vector<TransactionId> txns;
+  // Same rationale as EraseDdlTxnsWaitingForSchemaVersion: alter table is async and a later
+  // concurrent alter (e.g. removing an index from the base table while also rolling back an
+  // ALTER TABLE in the same savepoint rollback) can advance the schema version past the one we
+  // registered. TServers may report only the latest schema version, so clear all waits for
+  // versions <= the reported one.
+  auto upper_bound_iter =
+      ddl_txns_for_subtxn_rollback_waiting_for_schema_version_.upper_bound(schema_version);
+  for (auto it = ddl_txns_for_subtxn_rollback_waiting_for_schema_version_.begin();
+       it != upper_bound_iter; ++it) {
+    txns.push_back(it->second);
   }
-  return txn;
+  ddl_txns_for_subtxn_rollback_waiting_for_schema_version_.erase(
+      ddl_txns_for_subtxn_rollback_waiting_for_schema_version_.begin(), upper_bound_iter);
+  return txns;
 }
 
 bool TableInfo::IsUserCreated() const {

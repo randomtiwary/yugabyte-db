@@ -959,7 +959,11 @@ class TableInfo : public RefCountedThreadSafe<TableInfo>,
   void AddDdlTxnForRollbackToSubTxnWaitingForSchemaVersion(
       int schema_version, const TransactionId& txn) EXCLUDES(lock_);
 
-  TransactionId EraseDdlTxnForRollbackToSubTxnWaitingForSchemaVersion(
+  // Erase and return all DDL transactions waiting for a schema version <= the given one as part
+  // of a rollback to sub-transaction. Must erase all versions <= the reported version because a
+  // concurrent alter (e.g. index deletion during the same rollback) can bump the schema version
+  // past the one we registered, and tablets may report only the latest version.
+  std::vector<TransactionId> EraseDdlTxnsForRollbackToSubTxnWaitingForSchemaVersion(
       int schema_version) EXCLUDES(lock_);
 
   bool IsUserCreated() const;

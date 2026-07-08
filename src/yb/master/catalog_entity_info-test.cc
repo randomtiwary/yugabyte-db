@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include "yb/common/transaction.h"
 #include "yb/master/catalog_entity_info.h"
 #include "yb/util/test_thread_holder.h"
 #include "yb/util/test_util.h"
@@ -251,6 +252,44 @@ TEST_F(CatalogEntityInfoTest, TestTasks) {
   ASSERT_EQ(task6->state(), server::MonitoredTaskState::kAborted);
   entity.WaitTasksCompletion();
   ASSERT_EQ(tasks_tracker->GetTasks().size(), 5);
+}
+
+// When a later concurrent alter advances the schema version past the one we registered for a
+// subtxn rollback wait, erasing by the reported (higher) version must still clear the wait.
+TEST_F(CatalogEntityInfoTest, EraseSubTxnRollbackWaitsForSchemaVersionsUpToReported) {
+  scoped_refptr<TableInfo> table =
+      make_scoped_refptr<TableInfo>("erase-subtxn-schema-ver" /* table_id */, false /* colocated */);
+
+  const auto txn = TransactionId::GenerateRandom();
+  table->AddDdlTxnForRollbackToSubTxnWaitingForSchemaVersion(5, txn);
+
+  // Exact match clears the wait.
+  auto erased = table->EraseDdlTxnsForRollbackToSubTxnWaitingForSchemaVersion(5);
+  ASSERT_EQ(erased.size(), 1);
+  ASSERT_EQ(erased[0], txn);
+  ASSERT_TRUE(table->EraseDdlTxnsForRollbackToSubTxnWaitingForSchemaVersion(5).empty());
+
+  // Register again, then report a higher schema version (as tablets may do after a concurrent
+  // alter bumps the version past the one we registered).
+  table->AddDdlTxnForRollbackToSubTxnWaitingForSchemaVersion(5, txn);
+  erased = table->EraseDdlTxnsForRollbackToSubTxnWaitingForSchemaVersion(7);
+  ASSERT_EQ(erased.size(), 1);
+  ASSERT_EQ(erased[0], txn);
+  ASSERT_TRUE(table->EraseDdlTxnsForRollbackToSubTxnWaitingForSchemaVersion(7).empty());
+
+  // Multiple waits at different versions are all cleared when a higher version is reported.
+  const auto txn2 = TransactionId::GenerateRandom();
+  table->AddDdlTxnForRollbackToSubTxnWaitingForSchemaVersion(3, txn);
+  table->AddDdlTxnForRollbackToSubTxnWaitingForSchemaVersion(6, txn2);
+  erased = table->EraseDdlTxnsForRollbackToSubTxnWaitingForSchemaVersion(6);
+  ASSERT_EQ(erased.size(), 2);
+  // Versions 3 and 6 should be gone; a later wait at 8 is independent.
+  table->AddDdlTxnForRollbackToSubTxnWaitingForSchemaVersion(8, txn);
+  erased = table->EraseDdlTxnsForRollbackToSubTxnWaitingForSchemaVersion(7);
+  ASSERT_TRUE(erased.empty());
+  erased = table->EraseDdlTxnsForRollbackToSubTxnWaitingForSchemaVersion(8);
+  ASSERT_EQ(erased.size(), 1);
+  ASSERT_EQ(erased[0], txn);
 }
 
 } // namespace master
