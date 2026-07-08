@@ -1000,41 +1000,59 @@ TEST_P(PgDdlSavepointMiniClusterTest, TestRollbackToSavepointWithSlowIndexDeleti
 }
 
 // Rolling back both ALTER TABLE and CREATE INDEX on the same base table fires two concurrent
-// alter-table operations (schema restore + index removal). The second can advance the schema
-// version past the one the first registered a wait for; rollback must still complete.
+// alter-table operations (schema restore + index removal). Force the race with sync points:
+// 1. Base-table ALTER rollback registers a wait for schema version N+1.
+// 2. Index removal then bumps the base table to N+2 and sends its alter.
+// 3. Only then does the base-table alter RPC proceed.
+// Without clearing subtxn-rollback waits for all versions <= the reported one, tablets may
+// report N+2 while the wait is still for N+1 and ROLLBACK TO SAVEPOINT times out.
 TEST_P(PgDdlSavepointMiniClusterTest, TestRollbackAlterAndCreateIndexConcurrently) {
+  SyncPoint::GetInstance()->LoadDependency({
+      {
+          "CatalogManager::YsqlDdlTxnAlterTableHelper:AfterClearYsqlDdlTxnState",
+          "CatalogManager::MarkIndexInfoFromTableForDeletion:BeforeDeleteIndexInfo",
+      },
+      {
+          "CatalogManager::MarkIndexInfoFromTableForDeletion:AfterSendAlterTable",
+          "CatalogManager::YsqlDdlTxnAlterTableHelper:SendAlterTableRequestInternal",
+      },
+  });
+  SyncPoint::GetInstance()->ClearTrace();
+  SyncPoint::GetInstance()->EnableProcessing();
+
   auto conn = ASSERT_RESULT(Connect());
 
   ASSERT_OK(conn.Execute("DROP TABLE IF EXISTS concurrent_alter_idx_rb"));
   ASSERT_OK(conn.Execute("CREATE TABLE concurrent_alter_idx_rb (a INT, b INT)"));
 
-  // ROLLBACK TO SAVEPOINT path.
   ASSERT_OK(conn.Execute("BEGIN"));
-  ASSERT_OK(conn.Execute("SAVEPOINT a"));
+  // DDL before the savepoint so rollback is partial: the base table uses the subtxn-rollback
+  // schema-version wait map (not full DDL-txn cleanup).
+  ASSERT_OK(conn.Execute("ALTER TABLE concurrent_alter_idx_rb ADD COLUMN keep_me INT"));
+  ASSERT_OK(conn.Execute("SAVEPOINT sp"));
   ASSERT_OK(conn.Execute("ALTER TABLE concurrent_alter_idx_rb ADD COLUMN c INT"));
-  ASSERT_OK(conn.Execute("CREATE INDEX concurrent_alter_idx_rb_idx ON concurrent_alter_idx_rb(b)"));
-  ASSERT_OK(conn.Execute("ROLLBACK TO SAVEPOINT a"));
+  ASSERT_OK(conn.Execute(
+      "CREATE INDEX concurrent_alter_idx_rb_idx ON concurrent_alter_idx_rb(b)"));
+  ASSERT_OK(conn.Execute("ROLLBACK TO SAVEPOINT sp"));
+
+  // keep_me remains; c and the index are gone.
   auto col_count = ASSERT_RESULT(conn.FetchRow<PGUint64>(
       "SELECT COUNT(*) FROM information_schema.columns "
       "WHERE table_name = 'concurrent_alter_idx_rb'"));
-  ASSERT_EQ(col_count, 2);
+  ASSERT_EQ(col_count, 3);
   auto idx_count = ASSERT_RESULT(conn.FetchRow<PGUint64>(
       "SELECT COUNT(*) FROM pg_indexes WHERE tablename = 'concurrent_alter_idx_rb'"));
   ASSERT_EQ(idx_count, 0);
 
-  // Full transaction ROLLBACK also walks nested subtransactions and must not time out.
-  ASSERT_OK(conn.Execute("ALTER TABLE concurrent_alter_idx_rb ADD COLUMN c INT"));
-  ASSERT_OK(conn.Execute("CREATE INDEX concurrent_alter_idx_rb_idx ON concurrent_alter_idx_rb(b)"));
-  ASSERT_OK(conn.Execute("ROLLBACK"));
-  col_count = ASSERT_RESULT(conn.FetchRow<PGUint64>(
-      "SELECT COUNT(*) FROM information_schema.columns "
-      "WHERE table_name = 'concurrent_alter_idx_rb'"));
-  ASSERT_EQ(col_count, 2);
-  idx_count = ASSERT_RESULT(conn.FetchRow<PGUint64>(
-      "SELECT COUNT(*) FROM pg_indexes WHERE tablename = 'concurrent_alter_idx_rb'"));
-  ASSERT_EQ(idx_count, 0);
+  if (GetParam()) {
+    ASSERT_OK(conn.Execute("COMMIT"));
+  } else {
+    ASSERT_OK(conn.Execute("ROLLBACK"));
+  }
 
-  ASSERT_OK(conn.Execute("DROP TABLE concurrent_alter_idx_rb"));
+  SyncPoint::GetInstance()->DisableProcessing();
+
+  ASSERT_OK(conn.Execute("DROP TABLE IF EXISTS concurrent_alter_idx_rb"));
 }
 
 } // namespace yb::pgwrapper

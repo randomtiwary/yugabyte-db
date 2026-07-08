@@ -6938,12 +6938,17 @@ Status CatalogManager::MarkIndexInfoFromTableForDeletion(
         {{index_table_id, IndexPermissions::INDEX_PERM_WRITE_AND_DELETE_WHILE_REMOVING}}, epoch));
   } else {
     RSTATUS_DCHECK(data_map_ptr, InvalidArgument, "data_map_ptr is not set");
+    // Used by tests to order concurrent alters on the base table during savepoint rollback
+    // (schema restore vs index removal).
+    TEST_SYNC_POINT(
+        "CatalogManager::MarkIndexInfoFromTableForDeletion:BeforeDeleteIndexInfo");
     RETURN_NOT_OK(DeleteIndexInfoFromTable(indexed_table_id, index_table_id, epoch, data_map_ptr));
   }
 
   // Actual Deletion of the index info will happen asynchronously after all the
   // tablets move to the new IndexPermission of DELETE_ONLY_WHILE_REMOVING.
   RETURN_NOT_OK(SendAlterTableRequest(indexed_table, epoch));
+  TEST_SYNC_POINT("CatalogManager::MarkIndexInfoFromTableForDeletion:AfterSendAlterTable");
   return Status::OK();
 }
 
