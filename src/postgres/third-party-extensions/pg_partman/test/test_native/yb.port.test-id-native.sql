@@ -7,7 +7,7 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
--- BEGIN; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support
+BEGIN;
 SELECT set_config('search_path','partman, public',false);
 
 SELECT plan(112); -- YB: decreased number of tests
@@ -239,4 +239,4 @@ SELECT is_empty('SELECT * FROM partman_test.id_taptest_table_p3000000070', 'Chec
 SELECT hasnt_table('partman_test', 'template_id_taptest_table', 'Check that template table was dropped');
 
 SELECT * FROM finish();
--- ROLLBACK; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support
+ROLLBACK;

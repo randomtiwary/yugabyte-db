@@ -11,7 +11,7 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
--- BEGIN; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support
+BEGIN;
 SELECT set_config('search_path','partman, public',false);
 
 
@@ -146,4 +146,4 @@ SELECT hasnt_table('partman_test', 'template_id_taptest_table', 'Check that temp
 SELECT hasnt_table('partman_test', 'id_taptest_table_default', 'Check that default table was dropped');
 
 SELECT * FROM finish();
--- ROLLBACK; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support
+ROLLBACK;

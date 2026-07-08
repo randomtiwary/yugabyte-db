@@ -7,7 +7,7 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
--- BEGIN; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support
+BEGIN;
 SELECT set_config('search_path','partman, public',false);
 
 SELECT plan(324); -- YB: decreased number of tests
@@ -713,5 +713,5 @@ SELECT hasnt_table('partman_test', 'template_id_taptest_table', 'Check that temp
 SELECT results_eq('SELECT count(*)::int FROM ONLY partman_test.undo_taptest', ARRAY[11], 'Check count from final unpartitioned target table');
 
 SELECT * FROM finish();
--- ROLLBACK; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support
+ROLLBACK;
 

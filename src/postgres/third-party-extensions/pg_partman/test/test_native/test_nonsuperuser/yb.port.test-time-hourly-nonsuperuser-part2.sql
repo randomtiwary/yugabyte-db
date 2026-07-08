@@ -7,7 +7,7 @@
 -- NOTE: THIS FILE MUST BE RUN AS partman_basic AND CONNECT TO THE DATABASE THAT RAN PART 1 TO EFFECTIVLELY TEST AS NONSUPERUSER
 --      Ex  pg_prove -ovf -U partman_basic -d mydb test/test_native/test_nonsuperuser/test-time-hourly-nonsuperuser-part2.sql
 
--- BEGIN; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support
+BEGIN;
 SELECT set_config('search_path','partman, public',false);
 
 SELECT plan(54); -- YB: decreased number of tests
@@ -147,4 +147,4 @@ SELECT is_empty('SELECT * FROM partman_test.time_taptest_table_p'||to_char(date_
 
 
 SELECT * FROM finish();
--- ROLLBACK; YB: SAVEPOINT interleaving with DDL requires DDL savepoint support
+ROLLBACK;

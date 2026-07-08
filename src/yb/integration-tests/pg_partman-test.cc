@@ -33,6 +33,18 @@ class PgPartmanTest : public MiniClusterTestWithClient<ExternalMiniCluster> {
     opts.enable_ysql = true;
     // (Auto Analyze #28389)
     opts.extra_tserver_flags.push_back("--ysql_enable_auto_analyze=false");
+    // Transactional DDL is only enabled by default in release builds; enable it explicitly so
+    // pg_partman (and its pgtap coverage) works the same in debug builds.
+    opts.extra_master_flags.push_back("--ysql_yb_ddl_transaction_block_enabled=true");
+    opts.extra_tserver_flags.push_back("--ysql_yb_ddl_transaction_block_enabled=true");
+    // Interleaving SAVEPOINTs with DDL (used by pgtap ON_ERROR_ROLLBACK / BEGIN..ROLLBACK)
+    // requires the preview DDL savepoint support flag on master and tserver.
+    opts.extra_master_flags.push_back("--ysql_yb_enable_ddl_savepoint_support=true");
+    opts.extra_tserver_flags.push_back("--ysql_yb_enable_ddl_savepoint_support=true");
+    AppendFlagToAllowedPreviewFlagsCsv(
+        opts.extra_master_flags, "ysql_yb_enable_ddl_savepoint_support");
+    AppendFlagToAllowedPreviewFlagsCsv(
+        opts.extra_tserver_flags, "ysql_yb_enable_ddl_savepoint_support");
 
     cluster_.reset(new ExternalMiniCluster(opts));
     ASSERT_OK(cluster_->Start());
