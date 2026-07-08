@@ -3361,6 +3361,11 @@ class CatalogManager : public CatalogManagerIf, public SnapshotCoordinatorContex
   std::shared_ptr<YsqlTablespaceManager> tablespace_manager_ GUARDED_BY(tablespace_mutex_);
 
   struct YsqlDdlTransactionState {
+    // Status tablet of the DDL transaction. Required when re-triggering verification from the
+    // background task, which otherwise only has the transaction id (map key). An empty
+    // status_tablet causes TabletInvoker::Execute to CHECK-fail when polling txn status.
+    TabletId status_tablet;
+
     // Indicates whether the transaction is committed or aborted or unknown.
     TxnState txn_state;
 
