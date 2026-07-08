@@ -53,7 +53,8 @@ DEFINE_test_flag(bool, ysql_ddl_fail_transaction_status_poll, false,
     "If true, PollTransactionStatusBase::VerifyTransaction fails the task with an error instead "
     "of polling the transaction coordinator. Leaves the DDL verifier in "
     "kDdlPostProcessingFailed with txn_state still kUnknown (unlike "
-    "TEST_ysql_ddl_verification_failure_probability, which fails only after the outcome is known).");
+    "TEST_ysql_ddl_verification_failure_probability, which fails only after the outcome is "
+    "known).");
 
 DEFINE_test_flag(bool, yb_test_table_rewrite_keep_old_table, false,
     "Used together with the PG GUC yb_test_table_rewrite_keep_old_table in "
