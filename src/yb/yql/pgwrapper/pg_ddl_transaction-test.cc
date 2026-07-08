@@ -37,7 +37,7 @@ DECLARE_bool(yb_enable_read_committed_isolation);
 DECLARE_bool(report_ysql_ddl_txn_status_to_master);
 DECLARE_bool(ysql_ddl_transaction_wait_for_ddl_verification);
 DECLARE_int32(TEST_ysql_ddl_atomicity_alter_table_request_delay_ms);
-DECLARE_double(TEST_ysql_ddl_verification_failure_probability);
+DECLARE_bool(TEST_ysql_ddl_fail_transaction_status_poll);
 DECLARE_int32(ysql_ddl_post_processing_failed_verification_retry_secs);
 
 namespace yb::pgwrapper {
@@ -321,6 +321,15 @@ TEST_F(PgDdlTransactionMiniClusterTest, TestWaitForSchemaVersionAfterRollback) {
 }
 
 TEST_F(PgDdlTransactionMiniClusterTest, TestPostProcessingFailedPeriodicRetrigger) {
+  // Why the previous version of this test missed the status_tablet FATAL:
+  // TEST_ysql_ddl_verification_failure_probability fails only after the DDL txn outcome is
+  // already known (txn_state becomes kAborted/kCommitted). TriggerDdlVerificationIfNeeded then
+  // takes the early path that calls YsqlDdlTxnCompleteCallback without polling the coordinator,
+  // so an empty status_tablet on retrigger is never used and the CHECK never fires.
+  //
+  // Fail the status poll itself so we land in kDdlPostProcessingFailed with txn_state still
+  // kUnknown. Retrigger must re-poll the coordinator and therefore requires status_tablet.
+
   ANNOTATE_UNPROTECTED_WRITE(FLAGS_ysql_ddl_post_processing_failed_verification_retry_secs) = -1;
   auto conn = ASSERT_RESULT(Connect());
   auto client = ASSERT_RESULT(cluster_->CreateClient());
@@ -328,8 +337,8 @@ TEST_F(PgDdlTransactionMiniClusterTest, TestPostProcessingFailedPeriodicRetrigge
 
   ASSERT_OK(conn.Execute("CREATE TABLE ddl_pp_failed_retrigger (id INT PRIMARY KEY)"));
 
-  // Fail verification task so that it ends up in kDdlPostProcessingFailed state.
-  ANNOTATE_UNPROTECTED_WRITE(FLAGS_TEST_ysql_ddl_verification_failure_probability) = 1.0;
+  // Fail status polling so verification never learns commit/abort (txn_state stays kUnknown).
+  ANNOTATE_UNPROTECTED_WRITE(FLAGS_TEST_ysql_ddl_fail_transaction_status_poll) = true;
 
   ASSERT_OK(conn.Execute("BEGIN"));
   ASSERT_OK(conn.Execute("ALTER TABLE ddl_pp_failed_retrigger ADD COLUMN c INT"));
@@ -360,11 +369,20 @@ TEST_F(PgDdlTransactionMiniClusterTest, TestPostProcessingFailedPeriodicRetrigge
       MonoDelta::FromSeconds(60),
       "DDL verification should reach kDdlPostProcessingFailed"));
 
-  LOG(INFO) << "Done waiting for kDdlPostProcessingFailed state";
+  // Retrigger must take the poll path; if outcome were already known the status_tablet bug
+  // would not surface.
+  const auto txn_state = catalog_manager.TEST_GetYsqlDdlTxnState(txn_id);
+  ASSERT_TRUE(txn_state.has_value());
+  ASSERT_EQ(*txn_state, master::TxnState::kUnknown);
 
+  LOG(INFO) << "Done waiting for kDdlPostProcessingFailed with kUnknown txn_state";
+
+  // Allow status polling to succeed on retrigger.
+  ANNOTATE_UNPROTECTED_WRITE(FLAGS_TEST_ysql_ddl_fail_transaction_status_poll) = false;
   ANNOTATE_UNPROTECTED_WRITE(FLAGS_ysql_ddl_post_processing_failed_verification_retry_secs) = 1;
-  ANNOTATE_UNPROTECTED_WRITE(FLAGS_TEST_ysql_ddl_verification_failure_probability) = 0.0;
 
+  // Without status_tablet on the retrigger metadata, master FATALS in TabletInvoker::Execute.
+  // With the fix, verification is re-polled and completes.
   ASSERT_OK(WaitFor(
     [&] {
       const auto st = catalog_manager.TEST_GetYsqlDdlVerificationState(txn_id);
@@ -373,7 +391,7 @@ TEST_F(PgDdlTransactionMiniClusterTest, TestPostProcessingFailedPeriodicRetrigge
           *st != master::YsqlDdlVerificationState::kDdlPostProcessingFailed);
     },
     MonoDelta::FromSeconds(60),
-    "DDL verification task should have been re-triggered"));
+    "DDL verification task should have been re-triggered and progressed"));
 }
 
 TEST_F(PgDdlTransactionTest, TestRenameIndexAndTruncateInTxn) {

@@ -49,6 +49,12 @@ DEFINE_test_flag(bool, skip_transaction_verification, false,
 DEFINE_test_flag(double, ysql_ddl_transaction_verification_failure_probability, 0,
     "Inject random failure in checking transaction status for DDL transactions");
 
+DEFINE_test_flag(bool, ysql_ddl_fail_transaction_status_poll, false,
+    "If true, PollTransactionStatusBase::VerifyTransaction fails the task with an error instead "
+    "of polling the transaction coordinator. Leaves the DDL verifier in "
+    "kDdlPostProcessingFailed with txn_state still kUnknown (unlike "
+    "TEST_ysql_ddl_verification_failure_probability, which fails only after the outcome is known).");
+
 DEFINE_test_flag(bool, yb_test_table_rewrite_keep_old_table, false,
     "Used together with the PG GUC yb_test_table_rewrite_keep_old_table in "
     "some unit tests where we want to test schema version mismatch error on "
@@ -607,6 +613,11 @@ void PollTransactionStatusBase::Shutdown() {
 Status PollTransactionStatusBase::VerifyTransaction() {
   if (FLAGS_TEST_skip_transaction_verification) {
     return Status::OK();
+  }
+
+  if (FLAGS_TEST_ysql_ddl_fail_transaction_status_poll) {
+    return STATUS(
+        IllegalState, "Injected transaction status poll failure for testing");
   }
 
   YB_LOG_EVERY_N_SECS(INFO, 1) << LogPrefix() << "Verifying Transaction " << transaction_;

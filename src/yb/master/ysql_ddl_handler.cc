@@ -1026,6 +1026,16 @@ std::optional<YsqlDdlVerificationState> CatalogManager::TEST_GetYsqlDdlVerificat
   return verifier_state->state;
 }
 
+std::optional<TxnState> CatalogManager::TEST_GetYsqlDdlTxnState(
+    const TransactionId& txn_id) const {
+  LockGuard lock(ddl_txn_verifier_mutex_);
+  const auto* verifier_state = FindOrNull(ysql_ddl_txn_verfication_state_map_, txn_id);
+  if (!verifier_state) {
+    return std::nullopt;
+  }
+  return verifier_state->txn_state;
+}
+
 // Call TriggerDdlVerificationIfNeeded with a delay.
 void CatalogManager::ScheduleTriggerDdlVerificationIfNeeded(
     const TransactionMetadata& txn, const LeaderEpoch& epoch, int32_t delay_ms) {
