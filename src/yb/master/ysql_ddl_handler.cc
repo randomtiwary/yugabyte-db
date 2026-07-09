@@ -1074,8 +1074,21 @@ Status CatalogManager::YsqlRollbackDocdbSchemaToSubTxn(const std::string& pb_txn
   {
     LockGuard lock(ddl_txn_verifier_mutex_);
     auto verifier_state = FindOrNull(ysql_ddl_txn_verfication_state_map_, txn);
-    if (!verifier_state || verifier_state->state != YsqlDdlVerificationState::kDdlInProgress ||
-        verifier_state->txn_state != TxnState::kUnknown) {
+    // Allow rollback when verification is still in progress, or when it is in
+    // kDdlPostProcessingFailed. The latter happens when schema comparison cannot yet decide
+    // commit vs abort (e.g. a DocDB table that was both created and dropped in the same txn, as
+    // with matview rewrite: CREATE MATERIALIZED VIEW + REFRESH). Without this, ROLLBACK TO
+    // SAVEPOINT DocDB cleanup becomes a no-op, and a later full-txn cleanup path may DeleteTablet
+    // without excluding the DDL txn (self-abort).
+    //
+    // Do not proceed once the transaction outcome is known (kCommitted / kAborted) or post-
+    // processing has already started for a decided outcome (kDdlPostProcessing).
+    const bool allow_subtxn_rollback =
+        verifier_state &&
+        verifier_state->txn_state == TxnState::kUnknown &&
+        (verifier_state->state == YsqlDdlVerificationState::kDdlInProgress ||
+         verifier_state->state == YsqlDdlVerificationState::kDdlPostProcessingFailed);
+    if (!allow_subtxn_rollback) {
       VLOG(3) << "Rolling back to sub-transaction for an already completed "
               << " transaction: " << txn
               << ", verifier_state: "
@@ -1083,6 +1096,13 @@ Status CatalogManager::YsqlRollbackDocdbSchemaToSubTxn(const std::string& pb_txn
               << ", txn_state: "
               << ((verifier_state) ? ToString(verifier_state->txn_state) : "NULL");
       return Status::OK();
+    }
+    // If verification had failed transiently, restore kDdlInProgress so subsequent verification
+    // and cleanup paths see a consistent in-progress state for this savepoint rollback.
+    if (verifier_state->state == YsqlDdlVerificationState::kDdlPostProcessingFailed) {
+      LOG(INFO) << "Restoring DDL verification state to kDdlInProgress for transaction " << txn
+                << " to allow rollback to sub-transaction " << sub_txn_id;
+      verifier_state->state = YsqlDdlVerificationState::kDdlInProgress;
     }
 
     auto sub_txn_rollback_state =

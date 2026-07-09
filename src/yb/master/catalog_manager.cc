@@ -7624,10 +7624,29 @@ Status CatalogManager::DeleteTableInMemory(
   // Determine if we have to remove from the name map here before we change the table state.
   data.remove_from_name_map = l.data().table_type() != PGSQL_TABLE_TYPE && !l->started_hiding();
 
+  // When deleting tablets of a table that is bound to a YSQL DDL transaction, exclude that
+  // transaction from AbortActiveTransactions. Otherwise DeleteTablet self-aborts the DDL
+  // transaction and subsequent statements fail with "current transaction is expired or aborted" /
+  // "Unknown transaction".
+  //
+  // This covers:
+  // 1. ROLLBACK TO SAVEPOINT deleting tables created in the rolled-back subtransaction.
+  // 2. Full DDL txn abort/roll-forward cleanup of tables that still carry DDL transaction
+  //    metadata (not only subtxn-rollback). Important for matview rewrite: CREATE MATERIALIZED
+  //    VIEW + REFRESH in the same transaction creates a new DocDB table and drops the old one;
+  //    cleanup of those tables must not AbortActiveTransactions the DDL txn itself.
+  // 3. Heartbeat-triggered DeleteTablet retries (via TableInfo::exclude_aborting_transaction_id_).
   if (!hide_only && FLAGS_ysql_yb_enable_ddl_savepoint_support) {
     TransactionId txn_id_on_table = TransactionId::Nil();
     if (IsTableDeletionDueToRollbackToSubTxnWithLock(table.get(), l, txn_id_on_table)) {
       table->SetExcludeAbortingTransactionId(txn_id_on_table);
+    } else {
+      // Fall back to the DDL transaction recorded on the table, if any. GetCurrentDdlTransactionId
+      // returns Nil when the table is not undergoing DDL verification.
+      auto txn_id_res = l->GetCurrentDdlTransactionId();
+      if (txn_id_res.ok() && !txn_id_res->IsNil()) {
+        table->SetExcludeAbortingTransactionId(*txn_id_res);
+      }
     }
   }
 
@@ -11582,14 +11601,20 @@ Status CatalogManager::DeleteOrHideTabletsOfTable(
 
   string deletion_msg = "Table deleted at " + LocalTimeAsString();
 
-  // If the table was marked for deletion due to a subtransaction rollback, the DDL transaction ID
-  // is already stored in TableInfo. If we successfully retrieved it, we can skip the redundant
-  // check. Otherwise, we fall back to checking IsTableDeletionDueToRollbackToSubTxn.
+  // Prefer the exclude-abort txn id stored on TableInfo (set when marking the table DELETING).
+  // Fall back to subtxn-rollback detection, then to any DDL transaction still recorded on the
+  // table metadata (covers matview rewrite create+drop and full-txn abort/roll-forward cleanup).
   TransactionId exclude_abort_txn_id = table_info.GetExcludeAbortingTransactionId();
   if (exclude_abort_txn_id.IsNil() && FLAGS_ysql_yb_enable_ddl_savepoint_support) {
     TransactionId txn_id_on_table = TransactionId::Nil();
     if (IsTableDeletionDueToRollbackToSubTxn(&table_info, txn_id_on_table)) {
       exclude_abort_txn_id = txn_id_on_table;
+    } else {
+      auto l = table_info.LockForRead();
+      auto txn_id_res = l->GetCurrentDdlTransactionId();
+      if (txn_id_res.ok() && !txn_id_res->IsNil()) {
+        exclude_abort_txn_id = *txn_id_res;
+      }
     }
   }
 
