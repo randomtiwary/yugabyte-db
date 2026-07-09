@@ -3059,6 +3059,10 @@ YbcStatus YBCPgGetCDCConsistentChanges(
       }
     }
 
+    const char* docdb_txn_id = nullptr;
+    if (row_message_pb.has_transaction_id() && !row_message_pb.transaction_id().empty()) {
+      docdb_txn_id = YBCPAllocStdString(row_message_pb.transaction_id());
+    }
     new (&resp_rows[row_idx]) YbcPgRowMessage{
         .col_count = col_count,
         .cols = cols,
@@ -3071,7 +3075,10 @@ YbcStatus YBCPgGetCDCConsistentChanges(
         .lsn = row_message_pb.pg_lsn(),
         .xid = row_message_pb.pg_transaction_id(),
         .xrepl_origin_id =
-            row_message_pb.has_xrepl_origin_id() ? row_message_pb.xrepl_origin_id() : 0};
+            row_message_pb.has_xrepl_origin_id() ? row_message_pb.xrepl_origin_id() : 0,
+        .record_time_ht =
+            row_message_pb.has_record_time() ? row_message_pb.record_time() : 0,
+        .docdb_transaction_id = docdb_txn_id};
 
     min_resp_lsn = std::min(min_resp_lsn, row_message_pb.pg_lsn());
     max_resp_lsn = std::max(max_resp_lsn, row_message_pb.pg_lsn());
