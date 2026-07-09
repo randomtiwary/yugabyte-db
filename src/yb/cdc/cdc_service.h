@@ -305,8 +305,9 @@ class CDCServiceImpl : public CDCServiceIf {
 
   static bool IsCDCSDKSnapshotBootstrapRequest(const CDCSDKCheckpointPB& req_checkpoint);
 
-  // Returns a list of catalog tables which gets streamed. (Currently 'pg_publication_rel' &
-  // 'pg_class' are the only catalog tables which gets streamed).
+  // Returns a list of catalog tables which get streamed (pg_class, pg_publication_rel,
+  // pg_replication_origin, pg_publication; and pg_attribute when
+  // ysql_yb_enable_logical_replication_transactional_ddl is true).
   // 'namespace_id' is the id of namespace on which stream was created.
   static Result<std::vector<TableId>> GetStreamableCatalogTables(const NamespaceId& namespace_id);
 
