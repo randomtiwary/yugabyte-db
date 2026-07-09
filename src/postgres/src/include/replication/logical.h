@@ -126,9 +126,11 @@ typedef struct LogicalDecodingContext
 	/*
 	 * YB: A per table_oid to oid map.
 	 *
-	 * If an entry is present in the table, it indicates that the next
-	 * DML record should invalidate the relcache and set yb_read_time to its
-	 * commit_time.
+	 * If an entry is present in the table, it indicates that the next DML
+	 * record for that table should notify the output plugin of a schema change
+	 * (RELATION message). Relcache invalidation and catalog in_txn_limit are
+	 * applied when the DDL record is received (see YBHandleRelcacheRefresh),
+	 * so interleaved DDL/DML within one transaction block works correctly.
 	 *
 	 * The entry (value) remains unused i.e. this is used like a set.
 	 */
