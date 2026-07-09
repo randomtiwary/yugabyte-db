@@ -33,6 +33,7 @@
 #include "catalog/pg_collation.h"
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_statistic.h"
 #include "catalog/pg_statistic_ext.h"
 #include "commands/dbcommands.h"
 #include "commands/progress.h"
@@ -1843,6 +1844,58 @@ update_attstats(Oid relid, bool inh, int natts, VacAttrStats **vacattrstats)
 								 ObjectIdGetDatum(relid),
 								 Int16GetDatum(stats->attr->attnum),
 								 BoolGetDatum(inh));
+
+		/*
+		 * YB: SearchSysCache3(STATRELATTINH) can report a false miss when the
+		 * catcache is marked fully loaded and allows implicit negative entries
+		 * for pg_statistic.  In that case we skip the DocDB scan and synthesize
+		 * a negative entry even though a committed row exists (e.g. from
+		 * auto-ANALYZE on another node).  The subsequent CatalogTupleInsert then
+		 * fails with:
+		 *   duplicate key value violates unique constraint
+		 *   "pg_statistic_relid_att_inh_index"
+		 *
+		 * Fall back to a direct index scan on the open pg_statistic relation
+		 * before deciding to insert.  This is the same pattern used by
+		 * RemoveStatistics() / CopyStatistics() in heap.c.
+		 */
+		if (!HeapTupleIsValid(oldtup) && IsYugaByteEnabled())
+		{
+			ScanKeyData skey[3];
+			SysScanDesc scandesc;
+			HeapTuple	htup;
+
+			ScanKeyInit(&skey[0],
+						Anum_pg_statistic_starelid,
+						BTEqualStrategyNumber, F_OIDEQ,
+						ObjectIdGetDatum(relid));
+			ScanKeyInit(&skey[1],
+						Anum_pg_statistic_staattnum,
+						BTEqualStrategyNumber, F_INT2EQ,
+						Int16GetDatum(stats->attr->attnum));
+			ScanKeyInit(&skey[2],
+						Anum_pg_statistic_stainherit,
+						BTEqualStrategyNumber, F_BOOLEQ,
+						BoolGetDatum(inh));
+
+			scandesc = systable_beginscan(sd, StatisticRelidAttnumInhIndexId,
+										  true, NULL, 3, skey);
+			htup = systable_getnext(scandesc);
+			if (HeapTupleIsValid(htup))
+			{
+				/* Found on disk; update rather than insert. */
+				stup = heap_modify_tuple(htup,
+										 RelationGetDescr(sd),
+										 values,
+										 nulls,
+										 replaces);
+				CatalogTupleUpdate(sd, &stup->t_self, stup);
+				heap_freetuple(stup);
+				systable_endscan(scandesc);
+				continue;
+			}
+			systable_endscan(scandesc);
+		}
 
 		if (HeapTupleIsValid(oldtup))
 		{

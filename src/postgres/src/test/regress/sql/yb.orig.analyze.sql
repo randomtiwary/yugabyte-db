@@ -176,3 +176,23 @@ SELECT relname, attname, reltuples, stadistinct, stanullfrac
     ORDER BY starelid, attnum;
 
 DROP TABLE t_part;
+
+-- Re-ANALYZE after stats already exist must UPDATE, not INSERT, even inside a
+-- transaction with savepoints.  False catcache misses for STATRELATTINH would
+-- otherwise fail with:
+--   duplicate key value violates unique constraint
+--   "pg_statistic_relid_att_inh_index"
+CREATE TABLE analyze_dup_key_t (emp_id INT PRIMARY KEY, name TEXT, region TEXT, salary NUMERIC);
+INSERT INTO analyze_dup_key_t SELECT i, 'n' || i, 'r' || (i % 5), i * 1.5
+  FROM generate_series(1, 100) i;
+ANALYZE analyze_dup_key_t;
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+SAVEPOINT sp_0;
+SAVEPOINT sp_1;
+ANALYZE analyze_dup_key_t;
+SELECT COUNT(*) FROM pg_statistic s JOIN pg_class c ON c.oid = s.starelid
+  WHERE c.relname = 'analyze_dup_key_t';
+ROLLBACK TO SAVEPOINT sp_1;
+ANALYZE analyze_dup_key_t;
+COMMIT;
+DROP TABLE analyze_dup_key_t;
