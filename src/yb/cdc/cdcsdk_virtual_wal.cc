@@ -1159,8 +1159,12 @@ Status CDCSDKVirtualWAL::AddRecordToVirtualWalPriorityQueue(
           InternalError, Format("Tablet queue is empty for tablet_id: $0", tablet_id));
     }
     auto record = tablet_queue->front();
-    bool is_publication_refresh_record =
-        (tablet_id == kPublicationRefreshTabletID || tablet_id == master::kSysCatalogTabletId);
+    // Only the synthetic publication-refresh tablet uses PUBLICATION_REFRESH priority. Records
+    // from the real sys catalog tablet (pg_class, pg_attribute, ...) must be classified by their
+    // RowMessage op (BEGIN/DML/COMMIT/DDL) so catalog DMLs / transactional DDLs merge with user
+    // DMLs via record_time/write_id. Treating all sys catalog tablet rows as PUBLICATION_REFRESH
+    // would zero those tie-breakers and ship them after user DMLs at the same commit_time.
+    bool is_publication_refresh_record = (tablet_id == kPublicationRefreshTabletID);
     bool result =
         CDCSDKUniqueRecordID::CanFormUniqueRecordId(is_publication_refresh_record, record);
     if (result) {
