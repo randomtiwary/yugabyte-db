@@ -724,6 +724,13 @@ typedef struct {
   uint32_t xid;
   // Replication origin id associated with the transaction.
   uint32_t xrepl_origin_id;
+  // Hybrid time when the intent / WAL op was written (record_time). Used by logical replication
+  // transactional DDL to set the historical catalog in_txn_limit while decoding DMLs. 0 if unset.
+  uint64_t record_time_ht;
+  // DocDB transaction id (UUID string) for the source transaction. Used by logical replication
+  // transactional DDL to attach historical catalog reads to the committed txn's intents.
+  // NULL if unset. Palloc'd; freed via DeepFreeRecordBatch.
+  const char* docdb_transaction_id;
 } YbcPgRowMessage;
 
 // Upon adding any more palloc'd members in the below struct, add logic to free it in
