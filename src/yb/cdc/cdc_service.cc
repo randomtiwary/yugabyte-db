@@ -265,6 +265,7 @@ DECLARE_bool(cdcsdk_enable_dynamic_table_addition_with_table_cleanup);
 DECLARE_bool(ysql_yb_enable_consistent_replication_from_hash_range);
 
 DECLARE_bool(ysql_yb_enable_implicit_dynamic_tables_logical_replication);
+DECLARE_bool(ysql_yb_enable_logical_replication_transactional_ddl);
 
 DECLARE_bool(enable_table_rewrite_for_cdcsdk_table);
 
@@ -2860,9 +2861,9 @@ Result<bool> CDCServiceImpl::CheckBeforeImageActive(
     // - If the tablet is colocated, we check the replica identities of this tablet's tables which
     // are present in the stream metadata's replica identity map.
     // - If the tablet is sys catalog, we check the replica identities of only tables
-    // 'pg_publication_rel', 'pg_class' & 'pg_replication_origin' residing in it (This is because
-    // currently only these sys catalog tables are part of publication's table list).
-    // If before image is active for any such tables then we should return true.
+    // 'pg_publication_rel', 'pg_class', 'pg_replication_origin' & 'pg_attribute' residing in it
+    // (This is because currently only these sys catalog tables are part of publication's table
+    // list). If before image is active for any such tables then we should return true.
     if (is_colocated_tablet || is_sys_catalog_tablet) {
       auto table_ids = tablet_peer->tablet_metadata()->GetAllColocatedTables();
       bool replica_identity_found_for_any_table = false;
@@ -4876,6 +4877,9 @@ Result<std::vector<TableId>> CDCServiceImpl::GetStreamableCatalogTables(
   table_ids.push_back(GetPgsqlTableId(pg_database_oid, kPgPublicationRelOid));
   table_ids.push_back(GetPgsqlTableId(kTemplate1Oid, kPgReplicationOriginOid));
   table_ids.push_back(GetPgsqlTableId(pg_database_oid, kPgPublicationOid));
+  if (FLAGS_ysql_yb_enable_logical_replication_transactional_ddl) {
+    table_ids.push_back(GetPgsqlTableId(pg_database_oid, kPgAttributeTableOid));
+  }
   return table_ids;
 }
 

@@ -203,6 +203,7 @@ DECLARE_uint64(cdc_intent_retention_ms);
 DECLARE_uint32(cdcsdk_tablet_not_of_interest_timeout_secs);
 DECLARE_bool(cdcsdk_enable_dynamic_table_addition_with_table_cleanup);
 DECLARE_bool(ysql_yb_enable_implicit_dynamic_tables_logical_replication);
+DECLARE_bool(ysql_yb_enable_logical_replication_transactional_ddl);
 DECLARE_bool(ysql_yb_cdcsdk_stream_tables_without_primary_key);
 DECLARE_bool(enable_table_rewrite_for_cdcsdk_table);
 
@@ -648,8 +649,13 @@ std::string CDCStreamInfosAsString(const std::vector<CDCStreamInfoPointer>& cdc_
 }
 
 bool IsCatalogTableEligibleForCDC(uint32_t table_oid) {
-  return table_oid == kPgClassTableOid || table_oid == kPgPublicationRelOid ||
-         table_oid == kPgReplicationOriginOid || table_oid == kPgPublicationOid;
+  if (table_oid == kPgClassTableOid || table_oid == kPgPublicationRelOid ||
+      table_oid == kPgReplicationOriginOid || table_oid == kPgPublicationOid) {
+    return true;
+  }
+  // pg_attribute is streamed only when transactional DDL logical replication is enabled.
+  return FLAGS_ysql_yb_enable_logical_replication_transactional_ddl &&
+         table_oid == kPgAttributeTableOid;
 }
 
 }  // namespace
@@ -1142,7 +1148,8 @@ Status CatalogManager::CreateNewCDCStreamForNamespace(
 
   // We add the pg_class, pg_publication_rel, pg_replication_origin and pg_publication catalog
   // tables to the stream metadata as we will poll them to figure out changes to the publications
-  // and replication origins. This will not be done for gRPC streams.
+  // and replication origins. When transactional DDL logical replication is enabled, also add
+  // pg_attribute so DDLs can be detected from catalog DMLs. This will not be done for gRPC streams.
   if (FLAGS_ysql_yb_enable_implicit_dynamic_tables_logical_replication &&
       FLAGS_cdc_enable_dynamic_schema_changes && req.has_cdcsdk_ysql_replication_slot_name()) {
     auto database_oid = VERIFY_RESULT(GetPgsqlDatabaseOid(namespace_id));
@@ -1150,9 +1157,16 @@ Status CatalogManager::CreateNewCDCStreamForNamespace(
     table_ids.push_back(GetPgsqlTableId(database_oid, kPgPublicationRelOid));
     table_ids.push_back(GetPgsqlTableId(kTemplate1Oid, kPgReplicationOriginOid));
     table_ids.push_back(GetPgsqlTableId(database_oid, kPgPublicationOid));
-    VLOG_WITH_FUNC(1) << "Added the catalog tables pg_class, pg_publication_rel, "
-                      << "pg_replication_origin and pg_publication to the stream metadata tables "
-                      << "list.";
+    if (FLAGS_ysql_yb_enable_logical_replication_transactional_ddl) {
+      table_ids.push_back(GetPgsqlTableId(database_oid, kPgAttributeTableOid));
+      VLOG_WITH_FUNC(1) << "Added the catalog tables pg_class, pg_publication_rel, "
+                        << "pg_replication_origin, pg_publication and pg_attribute to the stream "
+                        << "metadata tables list.";
+    } else {
+      VLOG_WITH_FUNC(1) << "Added the catalog tables pg_class, pg_publication_rel, "
+                        << "pg_replication_origin and pg_publication to the stream metadata tables "
+                        << "list.";
+    }
   }
 
   VLOG_WITH_FUNC(1) << Format("Creating CDCSDK stream for $0 tables", table_ids.size());

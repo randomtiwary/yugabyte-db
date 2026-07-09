@@ -220,6 +220,28 @@ class CDCSDKVirtualWAL {
 
   bool IsCatalogTableEligibleForCDC(const TableId& table_id) const;
 
+  // True when ysql_yb_enable_logical_replication_transactional_ddl is active for this VWAL
+  // (pg_attribute is being polled and DDLs are derived from catalog DMLs).
+  bool IsTransactionalDdlMode() const { return !pg_attribute_table_id_.empty(); }
+
+  // Returns true if the record is a DML on pg_class or pg_attribute that should be converted into a
+  // DDL record for the walsender (transactional DDL support).
+  bool IsCatalogDmlForDDL(const std::shared_ptr<CDCSDKProtoRecordPB>& record) const;
+
+  // Extracts the PG relation OID from a pg_class or pg_attribute DML record.
+  Result<uint32_t> GetRelationOidFromCatalogDml(
+      const std::shared_ptr<CDCSDKProtoRecordPB>& record) const;
+
+  // Constructs a DDL CDC record from a DML change on pg_class or pg_attribute for transactional
+  // DDL support. Returns nullptr if the record should be ignored (e.g. non-publication table,
+  // duplicate for the same commit_time/table).
+  Result<std::shared_ptr<CDCSDKProtoRecordPB>> ConstructDDLRecordFromCatalogDml(
+      const std::shared_ptr<CDCSDKProtoRecordPB>& catalog_record);
+
+  // Drops shipped-DDL dedup entries with commit_time <= |up_to_commit_time| so the map cannot grow
+  // without bound across long-lived Virtual WAL sessions.
+  void PruneShippedTransactionalDdlKeys(uint64_t up_to_commit_time);
+
   bool ShouldPopulateExplicitCheckpoint();
 
   bool CheckForTableRewriteOrDrop(std::shared_ptr<CDCSDKProtoRecordPB> record);
@@ -370,6 +392,20 @@ class CDCSDKVirtualWAL {
 
   // The table ID of pg_publication catalog table for the database on which virtual WAL is polling.
   TableId pg_publication_table_id_;
+
+  // The table ID of pg_attribute catalog table for the database on which virtual WAL is polling.
+  // Used (with pg_class) to detect transactional DDLs. Empty when transactional DDL mode is off.
+  TableId pg_attribute_table_id_;
+
+  // PG database OID for the namespace on which virtual WAL is polling. Used to construct table IDs
+  // for user tables referenced by pg_class / pg_attribute DMLs when generating DDL records.
+  uint32_t pg_database_oid_ = 0;
+
+  // Dedup of shipped transactional DDL records, keyed by commit_time for O(log n) pruning.
+  // Values are "record_time:table_id" strings already shipped for that commit_time. Entries are
+  // pruned once the corresponding commit_time has been acknowledged / persisted so the map does
+  // not grow unboundedly for long-lived Virtual WAL sessions.
+  std::map<uint64_t, std::unordered_set<std::string>> shipped_transactional_ddl_keys_;
 
   // The list of publication OIDs that are being polled by the virtual WAL.
   std::unordered_set<uint32_t> publications_list_;
