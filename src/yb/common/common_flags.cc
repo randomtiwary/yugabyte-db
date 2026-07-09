@@ -126,6 +126,17 @@ DEFINE_NON_RUNTIME_bool(ysql_yb_enable_implicit_dynamic_tables_logical_replicati
     "This replaces the previous mechanism of periodic publication refresh with PG "
     "like semantics for dynamic tables");
 
+// When true, logical replication (Virtual WAL + walsender) supports transactional DDL:
+// interleaved DML and DDL in the same transaction block are streamed with correct ordering
+// and catalog visibility (historical catalog reads within the committed txn's intents).
+// Requires ysql_yb_ddl_transaction_block_enabled on the primary and catalog streaming
+// (ysql_yb_enable_implicit_dynamic_tables_logical_replication) for the slot.
+DEFINE_NON_RUNTIME_bool(ysql_yb_enable_logical_replication_transactional_ddl, false,
+    "Enable logical replication support for transactional DDL. When set, Virtual WAL "
+    "synthesizes DDL records from pg_class/pg_attribute catalog DMLs and the walsender "
+    "performs historical catalog reads so interleaved DML/DDL within a transaction block "
+    "is decoded correctly. Default false.");
+
 DEFINE_RUNTIME_bool(enable_table_rewrite_for_cdcsdk_table, true,
     "When set, CDC will not block DDLs causing table rewrites. Also records from the re-written "
     "tablets will be streamed by CDC after finishing the streaming of data from older tablets.");
