@@ -622,6 +622,10 @@ void YBCPgResetCatalogReadTime() {
   pgapi->ResetCatalogReadTime();
 }
 
+void YBCPgSetCatalogInTxnLimit(uint64_t in_txn_limit_ht) {
+  pgapi->SetCatalogInTxnLimit(in_txn_limit_ht);
+}
+
 YbcReadHybridTime YBCGetPgCatalogReadTime() {
   return MakeYbcReadHybridTime(pgapi->GetCatalogReadTime());
 }
