@@ -838,6 +838,10 @@ Status CDCSDKVirtualWAL::GetConsistentChangesInternal(
           last_shipped_commit.commit_record_unique_id = unique_id;
           last_shipped_commit.last_pub_refresh_time = last_pub_refresh_time;
 
+          // All catalog DMLs for this commit_time have been processed; drop their DDL dedup
+          // entries. (Multiple logical txns may share a commit_time and are shipped as one.)
+          PruneShippedTransactionalDdlKeys(unique_id->GetCommitTime());
+
           ResetCommitDecisionVariables();
 
           metadata.commit_records++;
@@ -1478,6 +1482,8 @@ Status CDCSDKVirtualWAL::UpdateSlotEntryInCDCState(
 
   // Update the local copy of slot restart time after successfully updating the cdc_state entry.
   last_persisted_record_id_commit_time_ = HybridTime(*entry.record_id_commit_time);
+  // Drop DDL dedup entries for commit_times that will not be re-streamed after this restart point.
+  PruneShippedTransactionalDdlKeys(last_persisted_record_id_commit_time_.ToUint64());
 
   return Status::OK();
 }
@@ -1929,10 +1935,12 @@ Result<std::shared_ptr<CDCSDKProtoRecordPB>> CDCSDKVirtualWAL::ConstructDDLRecor
   // writes, or both pg_class and pg_attribute). Collapse to one shipped DDL per
   // (commit_time, record_time, table_id). Including record_time keeps sequential ALTERs in the
   // same txn (different write HTs) as separate DDL records so they can interleave with DMLs.
-  const std::string ddl_key = Format(
-      "$0:$1:$2", row_message.commit_time(),
-      row_message.has_record_time() ? row_message.record_time() : 0, table_id);
-  if (shipped_transactional_ddl_keys_.contains(ddl_key)) {
+  // Map is keyed by commit_time so entries can be pruned when the txn is shipped / acknowledged.
+  const uint64_t commit_time = row_message.commit_time();
+  const std::string entry_key = Format(
+      "$0:$1", row_message.has_record_time() ? row_message.record_time() : 0, table_id);
+  auto& entries_for_commit = shipped_transactional_ddl_keys_[commit_time];
+  if (entries_for_commit.contains(entry_key)) {
     return nullptr;
   }
 
@@ -1999,8 +2007,22 @@ Result<std::shared_ptr<CDCSDKProtoRecordPB>> CDCSDKVirtualWAL::ConstructDDLRecor
     ddl_record->mutable_cdc_sdk_op_id()->CopyFrom(catalog_record->cdc_sdk_op_id());
   }
 
-  shipped_transactional_ddl_keys_.insert(ddl_key);
+  entries_for_commit.insert(entry_key);
   return ddl_record;
+}
+
+void CDCSDKVirtualWAL::PruneShippedTransactionalDdlKeys(uint64_t up_to_commit_time) {
+  if (shipped_transactional_ddl_keys_.empty()) {
+    return;
+  }
+  // Erase [begin, upper_bound(up_to_commit_time)] i.e. all keys with commit_time <= bound.
+  auto end = shipped_transactional_ddl_keys_.upper_bound(up_to_commit_time);
+  if (end != shipped_transactional_ddl_keys_.begin()) {
+    VLOG_WITH_PREFIX(2) << "Pruning shipped transactional DDL dedup entries with commit_time <= "
+                        << up_to_commit_time << ", count before: "
+                        << shipped_transactional_ddl_keys_.size();
+    shipped_transactional_ddl_keys_.erase(shipped_transactional_ddl_keys_.begin(), end);
+  }
 }
 
 bool CDCSDKVirtualWAL::DeterminePubRefreshFromMasterRecord(

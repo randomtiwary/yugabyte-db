@@ -238,6 +238,10 @@ class CDCSDKVirtualWAL {
   Result<std::shared_ptr<CDCSDKProtoRecordPB>> ConstructDDLRecordFromCatalogDml(
       const std::shared_ptr<CDCSDKProtoRecordPB>& catalog_record);
 
+  // Drops shipped-DDL dedup entries with commit_time <= |up_to_commit_time| so the map cannot grow
+  // without bound across long-lived Virtual WAL sessions.
+  void PruneShippedTransactionalDdlKeys(uint64_t up_to_commit_time);
+
   bool ShouldPopulateExplicitCheckpoint();
 
   bool CheckForTableRewriteOrDrop(std::shared_ptr<CDCSDKProtoRecordPB> record);
@@ -397,9 +401,11 @@ class CDCSDKVirtualWAL {
   // for user tables referenced by pg_class / pg_attribute DMLs when generating DDL records.
   uint32_t pg_database_oid_ = 0;
 
-  // Tracks (commit_time, table_id) pairs for which a transactional DDL record has already been
-  // shipped, so multiple catalog DML rows for the same table/txn only produce one DDL.
-  std::unordered_set<std::string> shipped_transactional_ddl_keys_;
+  // Dedup of shipped transactional DDL records, keyed by commit_time for O(log n) pruning.
+  // Values are "record_time:table_id" strings already shipped for that commit_time. Entries are
+  // pruned once the corresponding commit_time has been acknowledged / persisted so the map does
+  // not grow unboundedly for long-lived Virtual WAL sessions.
+  std::map<uint64_t, std::unordered_set<std::string>> shipped_transactional_ddl_keys_;
 
   // The list of publication OIDs that are being polled by the virtual WAL.
   std::unordered_set<uint32_t> publications_list_;
