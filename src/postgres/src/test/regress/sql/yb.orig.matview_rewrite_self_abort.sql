@@ -1,25 +1,23 @@
--- Reproduction for: reads failing with "current transaction is expired or aborted" /
--- "Unknown transaction" after CREATE MATERIALIZED VIEW + REFRESH in one transaction
--- with savepoints (transactional DDL + DDL savepoint support).
+-- Reproduction: "current transaction is expired or aborted" / "Unknown transaction"
+-- after CREATE MATERIALIZED VIEW + REFRESH of that same view in one open transaction.
+--
+-- Observed failure mode does NOT require ROLLBACK or ROLLBACK TO SAVEPOINT. The crash
+-- sequence issued SAVEPOINT statements, then CREATE MV + REFRESH, then later SELECTs
+-- failed while the transaction was still open (no rollback first).
 --
 -- Why this is uncommon:
--- 1. Apps rarely CREATE a matview and REFRESH that same matview in the *same* open
---    transaction (REFRESH rewrites DocDB: create new table + drop old).
--- 2. Requires preview flags: ysql_yb_enable_ddl_savepoint_support (+ transactional DDL).
--- 3. The self-abort is a race: DeleteTablet of the rewritten DocDB tables can call
---    AbortActiveTransactions on the still-running client txn when
---    exclude_aborting_transaction_id is not set (full-txn cleanup path, not only
---    ROLLBACK TO SAVEPOINT). Timing of DDL verification / tablet deletion matters.
--- 4. Closely related sequences already in yb.orig.ddl_savepoint (REFRESH of a
---    pre-existing MV; CREATE MV + REFRESH then CREATE INDEX) often pass because the
---    race does not always fire.
+-- 1. Unusual pattern: CREATE a matview and REFRESH that same matview in one open
+--    transaction. REFRESH rewrites DocDB (create new table + mark old for drop).
+-- 2. Racey timing around DDL verification / DocDB cleanup of the rewritten tables
+--    while the client transaction is still running. Related sequences often pass
+--    because the race does not always fire.
 --
--- This file isolates the crash-log sequence so it can be run repeatedly, e.g.:
---   ./yb_build.sh release --java-test 'org.yb.pgsql.TestMatviewRewriteSelfAbort' -n 50
+-- Stress:
+--   ./yb_build.sh release --java-test 'org.yb.pgsql.TestMatviewRewriteSelfAbort' -n 50 --tp 1
 
 -- ---------------------------------------------------------------------------
--- Variant A: crash-log-like sequence (no client ROLLBACK before the failing reads).
--- CREATE MV + REFRESH of that same view, then more statements in the same txn.
+-- Primary repro (crash-log shape): CREATE + REFRESH, then more statements.
+-- No ROLLBACK / ROLLBACK TO SAVEPOINT before the critical reads.
 -- ---------------------------------------------------------------------------
 CREATE TABLE mv_rewrite_base (
     emp_id INT PRIMARY KEY,
@@ -37,62 +35,45 @@ SAVEPOINT sp_1;
 CREATE MATERIALIZED VIEW mv_rewrite_mv AS SELECT * FROM mv_rewrite_base;
 CREATE TEMP TABLE mv_rewrite_temp AS SELECT * FROM mv_rewrite_base;
 REFRESH MATERIALIZED VIEW mv_rewrite_mv;
--- Reads after CREATE+REFRESH must still succeed (failure mode: Unknown transaction).
+-- Failure mode: one of these (or similar later statements) returns
+-- "Unknown transaction" / "current transaction is expired or aborted".
 SELECT COUNT(*) FROM mv_rewrite_base;
 SELECT COUNT(*) FROM mv_rewrite_mv;
 SELECT matviewname FROM pg_matviews WHERE matviewname = 'mv_rewrite_mv';
 SELECT COUNT(*) FROM mv_rewrite_temp;
-ROLLBACK;
+-- Extra reads to widen the race window slightly (catalog + user tables).
+SELECT COUNT(*) FROM mv_rewrite_base;
+SELECT COUNT(*) FROM mv_rewrite_mv;
+COMMIT;
 
 DROP MATERIALIZED VIEW IF EXISTS mv_rewrite_mv;
 DROP TABLE IF EXISTS mv_rewrite_base;
 
 -- ---------------------------------------------------------------------------
--- Variant B: same rewrite, then ROLLBACK TO SAVEPOINT past CREATE+REFRESH,
--- then more statements (issue title: fail after rollback to savepoint).
+-- Same rewrite path without SAVEPOINT statements (check whether SAVEPOINT
+-- itself is load-bearing vs incidental to the randomness test).
 -- ---------------------------------------------------------------------------
-CREATE TABLE mv_rewrite_base2 (
+CREATE TABLE mv_rewrite_base_nosavepoint (
     emp_id INT PRIMARY KEY,
     name TEXT,
     salary NUMERIC
 );
-INSERT INTO mv_rewrite_base2
+INSERT INTO mv_rewrite_base_nosavepoint
 SELECT i, 'name_' || i, i * 1.5 FROM generate_series(1, 50) i;
 
 BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
-SAVEPOINT sp_0;
-DELETE FROM mv_rewrite_base2 WHERE emp_id = (
-    SELECT emp_id FROM mv_rewrite_base2 WHERE emp_id IS NOT NULL LIMIT 1);
-SAVEPOINT sp_1;
-CREATE MATERIALIZED VIEW mv_rewrite_mv2 AS SELECT * FROM mv_rewrite_base2;
-CREATE TEMP TABLE mv_rewrite_temp2 AS SELECT * FROM mv_rewrite_base2;
-REFRESH MATERIALIZED VIEW mv_rewrite_mv2;
-SELECT COUNT(*) FROM mv_rewrite_base2;
-SELECT COUNT(*) FROM mv_rewrite_mv2;
-ROLLBACK TO SAVEPOINT sp_1;
--- Transaction must remain usable after rolling back the rewrite.
-SELECT COUNT(*) FROM mv_rewrite_base2;
-SELECT COUNT(*) FROM pg_matviews WHERE matviewname = 'mv_rewrite_mv2';
-ROLLBACK;
+DELETE FROM mv_rewrite_base_nosavepoint WHERE emp_id = (
+    SELECT emp_id FROM mv_rewrite_base_nosavepoint WHERE emp_id IS NOT NULL LIMIT 1);
+CREATE MATERIALIZED VIEW mv_rewrite_mv_nosavepoint AS
+  SELECT * FROM mv_rewrite_base_nosavepoint;
+CREATE TEMP TABLE mv_rewrite_temp_nosavepoint AS
+  SELECT * FROM mv_rewrite_base_nosavepoint;
+REFRESH MATERIALIZED VIEW mv_rewrite_mv_nosavepoint;
+SELECT COUNT(*) FROM mv_rewrite_base_nosavepoint;
+SELECT COUNT(*) FROM mv_rewrite_mv_nosavepoint;
+SELECT COUNT(*) FROM mv_rewrite_temp_nosavepoint;
+SELECT COUNT(*) FROM mv_rewrite_base_nosavepoint;
+COMMIT;
 
-DROP TABLE IF EXISTS mv_rewrite_base2;
-
--- ---------------------------------------------------------------------------
--- Variant C: minimal CREATE + REFRESH only (no DELETE / TEMP), then reads and
--- ROLLBACK TO SAVEPOINT.
--- ---------------------------------------------------------------------------
-CREATE TABLE mv_min_base (id INT PRIMARY KEY, v TEXT);
-INSERT INTO mv_min_base SELECT i, 'v' || i FROM generate_series(1, 100) i;
-
-BEGIN ISOLATION LEVEL REPEATABLE READ;
-SAVEPOINT s1;
-CREATE MATERIALIZED VIEW mv_min AS SELECT * FROM mv_min_base;
-REFRESH MATERIALIZED VIEW mv_min;
-SELECT COUNT(*) FROM mv_min_base;
-SELECT COUNT(*) FROM mv_min;
-ROLLBACK TO SAVEPOINT s1;
-SELECT COUNT(*) FROM mv_min_base;
-SELECT COUNT(*) FROM pg_matviews WHERE matviewname = 'mv_min';
-ROLLBACK;
-
-DROP TABLE IF EXISTS mv_min_base;
+DROP MATERIALIZED VIEW IF EXISTS mv_rewrite_mv_nosavepoint;
+DROP TABLE IF EXISTS mv_rewrite_base_nosavepoint;
