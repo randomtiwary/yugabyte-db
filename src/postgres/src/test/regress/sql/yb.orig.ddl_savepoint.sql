@@ -157,6 +157,31 @@ SELECT indexname FROM pg_indexes WHERE indexname = 'test_table_idx_mv';
 ROLLBACK TO SAVEPOINT s3_refreshed_mv;
 ROLLBACK;
 
+-- CREATE MATERIALIZED VIEW + REFRESH of that same view in one transaction (with
+-- savepoints) rewrites the DocDB table (create new + drop old) while the client
+-- transaction is still running. Subsequent reads must not fail with
+-- "current transaction is expired or aborted" / "Unknown transaction".
+CREATE TABLE mv_rewrite_base (emp_id INT PRIMARY KEY, name TEXT, salary NUMERIC);
+INSERT INTO mv_rewrite_base SELECT i, 'name_' || i, i * 1.5
+  FROM generate_series(1, 50) i;
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+SAVEPOINT sp_0;
+DELETE FROM mv_rewrite_base WHERE emp_id = (
+  SELECT emp_id FROM mv_rewrite_base WHERE emp_id IS NOT NULL LIMIT 1);
+SAVEPOINT sp_1;
+CREATE MATERIALIZED VIEW mv_rewrite_mv AS SELECT * FROM mv_rewrite_base;
+CREATE TEMP TABLE mv_rewrite_temp AS SELECT * FROM mv_rewrite_base;
+REFRESH MATERIALIZED VIEW mv_rewrite_mv;
+-- Reads after CREATE+REFRESH must still succeed on the same transaction.
+SELECT COUNT(*) FROM mv_rewrite_base;
+SELECT COUNT(*) FROM mv_rewrite_mv;
+SELECT matviewname FROM pg_matviews WHERE matviewname = 'mv_rewrite_mv';
+-- ROLLBACK TO SAVEPOINT after rewrite must also leave the transaction usable.
+ROLLBACK TO SAVEPOINT sp_1;
+SELECT COUNT(*) FROM mv_rewrite_base;
+SELECT COUNT(*) FROM pg_matviews WHERE matviewname = 'mv_rewrite_mv';
+ROLLBACK;
+
 -- #29538: No Schema version mismatch in case of ALTER TABLE
 CREATE TABLE schema_version_mismatch_table (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
