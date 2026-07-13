@@ -37,6 +37,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -612,6 +613,14 @@ class CatalogManager : public CatalogManagerIf, public SnapshotCoordinatorContex
   Status TriggerDdlVerificationIfNeeded(const TransactionMetadata& txn, const LeaderEpoch& epoch);
   void ScheduleTriggerDdlVerificationIfNeeded(
     const TransactionMetadata& txn, const LeaderEpoch& epoch, int32_t delay_ms);
+
+  // Invokes TriggerDdlVerificationIfNeeded for each DDL transaction whose verification state is
+  // kDdlPostProcessingFailed.
+  void TriggerDdlVerificationForPostProcessingFailedTxns(const LeaderEpoch& epoch);
+
+  // Test-only: current YsqlDdlVerificationState for txn, or nullopt if not in the verifier map.
+  std::optional<YsqlDdlVerificationState> TEST_GetYsqlDdlVerificationState(
+      const TransactionId& txn_id) const EXCLUDES(ddl_txn_verifier_mutex_);
 
   // Get the information about the specified table.
   Status GetTableSchema(const GetTableSchemaRequestPB* req,
@@ -2262,6 +2271,18 @@ class CatalogManager : public CatalogManagerIf, public SnapshotCoordinatorContex
 
   void StartTablespaceBgTaskIfStopped();
 
+  void StartDdlPostProcessingFailedVerificationRetriggerIfStopped();
+
+  // Helper function to schedule the next iteration of the ddl post processing failed verification
+  // task.
+  void ScheduleDdlPostProcessingFailedVerificationRetriggerTask(bool schedule_now = false);
+
+  // Background task that re-triggers DDL verification for YSQL DDL transactions in
+  // kDdlPostProcessingFailed state.
+  // Note: This function should only ever be called by
+  // StartDdlPostProcessingFailedVerificationRetriggerIfStopped().
+  void RetriggerDdlPostProcessingFailedVerificationPeriodically();
+
   // Report metrics.
   void ReportMetrics();
 
@@ -3267,6 +3288,12 @@ class CatalogManager : public CatalogManagerIf, public SnapshotCoordinatorContex
   std::atomic<bool> tablespace_bg_task_running_;
 
   rpc::ScheduledTaskTracker refresh_ysql_tablespace_info_task_;
+
+  // Whether the periodic job to re-trigger DDL verification for kDdlPostProcessingFailed txns
+  // is running.
+  std::atomic<bool> ddl_post_processing_failed_verification_retrigger_running_;
+
+  rpc::ScheduledTaskTracker refresh_ysql_ddl_post_processing_failed_verification_task_;
 
   struct YsqlDdlTransactionState {
     // Indicates whether the transaction is committed or aborted or unknown.

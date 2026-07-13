@@ -366,6 +366,7 @@ void CatalogManagerBgTasks::RunOnceAsLeader(const LeaderEpoch& epoch) {
   }
 
   if (FLAGS_enable_ysql) {
+    catalog_manager_->StartDdlPostProcessingFailedVerificationRetriggerIfStopped();
     catalog_manager_->StartTablespaceBgTaskIfStopped();
     catalog_manager_->StartPgCatalogVersionsBgTaskIfStopped();
   }

@@ -421,6 +421,11 @@ DEFINE_NON_RUNTIME_int32(ysql_tablespace_info_refresh_secs, 30,
     "Frequency at which the table to tablespace information will be updated in master "
     "from pg catalog tables. A value of -1 disables the refresh task.");
 
+DEFINE_RUNTIME_int32(ysql_ddl_post_processing_failed_verification_retry_secs, 300,
+    "Frequency in seconds at which the master leader will re-trigger DDL verification for "
+    "YSQL DDL transactions in kDdlPostProcessingFailed state. A value of -1 disables this "
+    "background task.");
+
 // Change the default value of this flag to false once we declare Colocation GA.
 DEFINE_NON_RUNTIME_bool(ysql_legacy_colocated_database_creation, false,
             "Whether to create a legacy colocated database using pre-Colocation GA implementation");
@@ -1079,6 +1084,7 @@ CatalogManager::CatalogManager(Master* master, SysCatalogTable* sys_catalog)
       encryption_manager_(new EncryptionManager()),
       tablespace_manager_(std::make_shared<YsqlTablespaceManager>(nullptr, nullptr)),
       tablespace_bg_task_running_(false),
+      ddl_post_processing_failed_verification_retrigger_running_(false),
       cdc_stream_alter_table_throttler_([this]() -> uint64_t {
         return GetCDCStreamAlterTableRpcLimit();
       }) {
@@ -2286,6 +2292,8 @@ bool CatalogManager::StartShutdown() {
 
   refresh_ysql_pg_catalog_versions_task_.StartShutdown();
 
+  refresh_ysql_ddl_post_processing_failed_verification_task_.StartShutdown();
+
   xcluster_manager_->StartShutdown();
 
   if (sys_catalog_) {
@@ -2300,6 +2308,7 @@ void CatalogManager::CompleteShutdown() {
   refresh_ysql_tablespace_info_task_.CompleteShutdown();
   xrepl_parent_tablet_deletion_task_.CompleteShutdown();
   refresh_ysql_pg_catalog_versions_task_.CompleteShutdown();
+  refresh_ysql_ddl_post_processing_failed_verification_task_.CompleteShutdown();
   xcluster_manager_->CompleteShutdown();
 
   if (background_tasks_) {
@@ -2824,6 +2833,69 @@ void CatalogManager::StartTablespaceBgTaskIfStopped() {
   }
 
   ScheduleRefreshTablespaceInfoTask(true /* schedule_now */);
+}
+
+void CatalogManager::StartDdlPostProcessingFailedVerificationRetriggerIfStopped() {
+  if (FLAGS_ysql_ddl_post_processing_failed_verification_retry_secs <= 0 ||
+      FLAGS_create_initial_sys_catalog_snapshot) {
+    return;
+  }
+
+  const bool is_task_running =
+      ddl_post_processing_failed_verification_retrigger_running_.exchange(true);
+  if (is_task_running) {
+    return;
+  }
+
+  ScheduleDdlPostProcessingFailedVerificationRetriggerTask(true /* schedule_now */);
+}
+
+void CatalogManager::ScheduleDdlPostProcessingFailedVerificationRetriggerTask(bool schedule_now) {
+  int wait_time = 0;
+
+  if (!schedule_now) {
+    wait_time = FLAGS_ysql_ddl_post_processing_failed_verification_retry_secs;
+    if (wait_time <= 0) {
+      ddl_post_processing_failed_verification_retrigger_running_ = false;
+      return;
+    }
+  }
+
+  refresh_ysql_ddl_post_processing_failed_verification_task_.Schedule(
+      [this](const Status& status) {
+        Status s = background_tasks_thread_pool_->SubmitFunc(
+            std::bind(&CatalogManager::RetriggerDdlPostProcessingFailedVerificationPeriodically,
+                      this));
+        if (!s.ok()) {
+          LOG(WARNING)
+              << "Failed to schedule: RetriggerDdlPostProcessingFailedVerificationPeriodically";
+          ddl_post_processing_failed_verification_retrigger_running_ = false;
+        }
+      },
+      wait_time * 1s);
+}
+
+void CatalogManager::RetriggerDdlPostProcessingFailedVerificationPeriodically() {
+  if (FLAGS_ysql_ddl_post_processing_failed_verification_retry_secs <= 0) {
+    ddl_post_processing_failed_verification_retrigger_running_ = false;
+    return;
+  }
+
+  LeaderEpoch epoch;
+  {
+    SCOPED_LEADER_SHARED_LOCK(l, this);
+    if (!l.IsInitializedAndIsLeader()) {
+      LOG(INFO) << "No longer the leader, cancelling DDL post-processing failed verification "
+                << "retrigger task";
+      ddl_post_processing_failed_verification_retrigger_running_ = false;
+      return;
+    }
+    epoch = l.epoch();
+  }
+
+  TriggerDdlVerificationForPostProcessingFailedTxns(epoch);
+
+  ScheduleDdlPostProcessingFailedVerificationRetriggerTask();
 }
 
 void CatalogManager::ScheduleRefreshTablespaceInfoTask(const bool schedule_now) {
@@ -11153,6 +11225,12 @@ Status CatalogManager::EnableBgTasks() {
   // manage the background task that refreshes pg catalog versions. This task
   // will be started by the CatalogManagerBgTasks below.
   refresh_ysql_pg_catalog_versions_task_.Bind(&master_->messenger()->scheduler());
+
+  // Initialize refresh_ysql_ddl_post_processing_failed_verification_task_. This will be used to
+  // manage the background task that re-triggers DDL verification for transactions in
+  // kDdlPostProcessingFailed state. This task will be started by the CatalogManagerBgTasks below.
+  refresh_ysql_ddl_post_processing_failed_verification_task_.Bind(
+      &master_->messenger()->scheduler());
 
   background_tasks_.reset(new CatalogManagerBgTasks(master_));
   RETURN_NOT_OK_PREPEND(background_tasks_->Init(),
