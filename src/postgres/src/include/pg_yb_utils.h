@@ -760,10 +760,17 @@ extern int yb_test_sleep_before_executor_start_ms;
 
 /*
  * If set to non-zero, next DDL operation will fail with the specified error level:
- * 0 = disabled (default), 1 = ERROR, 2 = FATAL, 3 = PANIC, 4 = crash.
+ * 0 = disabled (default), 1 = ERROR, 2 = FATAL, 3 = PANIC, 4 = crash, 5 = conflict.
  * Resets to 0 after triggering.
  */
 extern int yb_test_fail_next_ddl;
+
+/*
+ * Number of DDL commits (yb_maybe_test_fail_ddl invocations) to skip before
+ * applying yb_test_fail_next_ddl. Used to inject a failure after intermediate
+ * commits in multi-transaction DDLs such as multi-relation ANALYZE.
+ */
+extern int yb_test_fail_ddl_skip_commits;
 
 /* Test fault injection: fail drop after heap_drop_with_catalog. */
 extern bool yb_test_fail_drop_after_heap_drop;
@@ -1044,8 +1051,20 @@ extern NodeTag YBGetCurrentStmtDdlNodeTag();
 extern bool YBIsCurrentStmtDdl();
 extern CommandTag YBGetCurrentStmtDdlCommandTag();
 extern bool YBGetDdlUseRegularTransactionBlock();
-extern void YBSetDdlOriginalNodeAndCommandTag(NodeTag nodeTag,
-											  CommandTag commandTag);
+
+/*
+ * Snapshot of the current top-level DDL statement identity. Used to preserve
+ * and restore state across intermediate commits (YbCommitTransactionCommandIntermediate).
+ */
+typedef struct YbDdlOriginalStmtState
+{
+	NodeTag		node_tag;
+	CommandTag	command_tag;
+	bool		is_top_level_ddl_active;
+} YbDdlOriginalStmtState;
+
+extern void YBGetDdlOriginalStmtState(YbDdlOriginalStmtState *state);
+extern void YBSetDdlOriginalStmtState(const YbDdlOriginalStmtState *state);
 extern void YbSetIsGlobalDDL();
 extern void YbIncrementPgTxnsCommitted();
 extern bool YbTrackPgTxnInvalMessagesForAnalyze();

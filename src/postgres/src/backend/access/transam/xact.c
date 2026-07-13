@@ -3353,21 +3353,23 @@ YBStartTransactionCommandInternal(bool yb_skip_read_committed_internal_savepoint
 void
 YbCommitTransactionCommandIntermediate(void)
 {
-	NodeTag		yb_node_tag;
-	CommandTag	yb_command_tag;
+	YbDdlOriginalStmtState yb_ddl_stmt_state;
 	bool		is_ddl_mode = YBCPgIsDdlMode();
 	YbDdlMode	ddl_mode;
 
 	elog(DEBUG2, "YbCommitTransactionCommandIntermediate");
 
 	/*
-	 * Remember the NodeTag and the CommandTag of the DDL currently being
-	 * executed so that we can set it into the next transaction.
+	 * Remember DDL state of the statement currently being executed so that we
+	 * can restore it on the next transaction. Intermediate commits clear
+	 * ddl_transaction_state (including is_top_level_ddl_active) when a plain
+	 * transaction containing DDL is committed. Without restoring that flag,
+	 * multi-transaction DDLs such as REINDEX can incorrectly allow query-layer
+	 * retries under READ COMMITTED after the first intermediate commit.
 	 */
 	if (YBIsDdlTransactionBlockEnabled() && is_ddl_mode)
 	{
-		yb_node_tag = YBGetCurrentStmtDdlNodeTag();
-		yb_command_tag = YBGetCurrentStmtDdlCommandTag();
+		YBGetDdlOriginalStmtState(&yb_ddl_stmt_state);
 		ddl_mode = YBGetCurrentDdlMode();
 	}
 
@@ -3380,7 +3382,7 @@ YbCommitTransactionCommandIntermediate(void)
 	if (YBIsDdlTransactionBlockEnabled() && is_ddl_mode)
 	{
 		YBAddDdlTxnState(ddl_mode);
-		YBSetDdlOriginalNodeAndCommandTag(yb_node_tag, yb_command_tag);
+		YBSetDdlOriginalStmtState(&yb_ddl_stmt_state);
 	}
 }
 

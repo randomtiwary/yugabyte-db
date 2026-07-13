@@ -258,6 +258,33 @@ TEST_F(PgDdlTransactionTest, TestReadCommittedTxnDdlDisabled) {
   ASSERT_OK(conn.Execute("INSERT INTO foo (id, new_col) VALUES (1, 42)"));
 }
 
+// Multi-relation ANALYZE uses intermediate commits between relations. Those commits clear
+// ddl_transaction_state; is_top_level_ddl_active must be restored so that under READ COMMITTED
+// with transactional DDL, a conflict after an intermediate commit is not query-layer-retried.
+// Without the restore, the conflict is treated as retryable and the statement succeeds on retry.
+TEST_F(PgDdlTransactionTest, TestTopLevelDdlActivePreservedAcrossIntermediateCommits) {
+  auto conn = ASSERT_RESULT(Connect());
+
+  ASSERT_OK(conn.Execute("SET default_transaction_isolation = 'read committed'"));
+  ASSERT_OK(conn.Execute("CREATE TABLE analyze_t1 (id int PRIMARY KEY, v text)"));
+  ASSERT_OK(conn.Execute("CREATE TABLE analyze_t2 (id int PRIMARY KEY, v text)"));
+  ASSERT_OK(conn.Execute("INSERT INTO analyze_t1 SELECT g, 'x' FROM generate_series(1, 10) g"));
+  ASSERT_OK(conn.Execute("INSERT INTO analyze_t2 SELECT g, 'y' FROM generate_series(1, 10) g"));
+
+  // Skip the first intermediate DDL commit (start of the multi-relation ANALYZE loop) so the
+  // injected conflict fires after ddl_transaction_state has been cleared and re-established.
+  ASSERT_OK(conn.Execute("SET yb_test_fail_ddl_skip_commits = 1"));
+  // Mode 5: inject ERRCODE_YB_TXN_CONFLICT on the next non-skipped DDL commit.
+  ASSERT_OK(conn.Execute("SET yb_test_fail_next_ddl = 5"));
+
+  // Retry must be refused because is_top_level_ddl_active remains true after the intermediate
+  // commit. If the flag were lost, the query layer would retry and the statement would succeed
+  // (yb_test_fail_next_ddl is cleared after the first injection).
+  ASSERT_NOK_STR_CONTAINS(
+      conn.Execute("ANALYZE analyze_t1, analyze_t2"),
+      "retrying DDL statements are not supported");
+}
+
 class PgDdlTransactionMiniClusterTest : public PgMiniTestBase {
  protected:
   void SetUp() override {

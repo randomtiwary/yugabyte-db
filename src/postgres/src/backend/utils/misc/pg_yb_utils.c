@@ -2360,6 +2360,8 @@ int			yb_test_sleep_before_executor_start_ms = 0;
 
 int			yb_test_fail_next_ddl = 0;
 
+int			yb_test_fail_ddl_skip_commits = 0;
+
 bool		yb_test_fail_drop_after_heap_drop = false;
 
 bool		yb_force_catalog_update_on_next_ddl = false;
@@ -2703,11 +2705,19 @@ YBGetDdlUseRegularTransactionBlock()
 }
 
 void
-YBSetDdlOriginalNodeAndCommandTag(NodeTag nodeTag,
-								  CommandTag commandTag)
+YBGetDdlOriginalStmtState(YbDdlOriginalStmtState *state)
 {
-	ddl_transaction_state.current_stmt_node_tag = nodeTag;
-	ddl_transaction_state.current_stmt_ddl_command_tag = commandTag;
+	state->node_tag = ddl_transaction_state.current_stmt_node_tag;
+	state->command_tag = ddl_transaction_state.current_stmt_ddl_command_tag;
+	state->is_top_level_ddl_active = ddl_transaction_state.is_top_level_ddl_active;
+}
+
+void
+YBSetDdlOriginalStmtState(const YbDdlOriginalStmtState *state)
+{
+	ddl_transaction_state.current_stmt_node_tag = state->node_tag;
+	ddl_transaction_state.current_stmt_ddl_command_tag = state->command_tag;
+	ddl_transaction_state.is_top_level_ddl_active = state->is_top_level_ddl_active;
 }
 
 void
@@ -9731,8 +9741,9 @@ YbNewTruncateColocatedIgnoreNotFound(Relation rel, YbcPgTransactionSetting trans
 
 /*
  * Check yb_test_fail_next_ddl and trigger the appropriate error if set.
- * 0 = disabled, 1 = ERROR, 2 = FATAL, 3 = PANIC, 4 = crash.
- * Resets to 0 after triggering.
+ * 0 = disabled, 1 = ERROR, 2 = FATAL, 3 = PANIC, 4 = crash, 5 = conflict.
+ * Resets to 0 after triggering. If yb_test_fail_ddl_skip_commits > 0, that
+ * many invocations are skipped first (without clearing yb_test_fail_next_ddl).
  */
 static void
 yb_maybe_test_fail_ddl(void)
@@ -9740,6 +9751,13 @@ yb_maybe_test_fail_ddl(void)
 	int fail_mode = yb_test_fail_next_ddl;
 	if (fail_mode == 0)
 		return;
+
+	if (yb_test_fail_ddl_skip_commits > 0)
+	{
+		yb_test_fail_ddl_skip_commits--;
+		return;
+	}
+
 	yb_test_fail_next_ddl = 0;
 	if (YbIsClientYsqlConnMgr())
 		YbSendParameterStatusForConnectionManager("yb_test_fail_next_ddl", "0");

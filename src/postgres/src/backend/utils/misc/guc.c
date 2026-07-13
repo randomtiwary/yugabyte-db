@@ -4279,6 +4279,18 @@ static struct config_int ConfigureNamesInt[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"yb_test_fail_ddl_skip_commits", PGC_SUSET, DEVELOPER_OPTIONS,
+			gettext_noop("Number of DDL commits to skip before applying "
+						 "yb_test_fail_next_ddl. Useful for failing after "
+						 "intermediate commits in multi-transaction DDLs."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&yb_test_fail_ddl_skip_commits,
+		0, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
 		{"yb_bnl_batch_size", PGC_USERSET, QUERY_TUNING_OTHER,
 			gettext_noop("Batch size of nested loop joins"),
 			gettext_noop("Set to 1 to always use simple nested loop joins"),
