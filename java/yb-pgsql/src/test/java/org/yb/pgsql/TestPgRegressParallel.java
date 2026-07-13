@@ -32,12 +32,9 @@ public class TestPgRegressParallel extends BasePgRegressTest {
   @Override
   protected Map<String, String> getTServerFlags() {
     Map<String, String> flags = super.getTServerFlags();
-    // TODO(#26734): Enable transactional DDL (& table locks) once savepoint for DDLs are supported.
-    flags.put("ysql_yb_ddl_transaction_block_enabled", "false");
-    // Concurrent DDL requires object locking, so keep the two flags consistent.
-    flags.put("enable_object_locking_for_table_locks", "false");
-    flags.put("ysql_enable_concurrent_ddl", "false");
-    flags.merge("allowed_preview_flags_csv", "ysql_enable_concurrent_ddl",
+    // Enable DDL savepoints so SAVEPOINT/ROLLBACK around DDL works under txn DDL.
+    flags.put("ysql_yb_enable_ddl_savepoint_support", "true");
+    flags.merge("allowed_preview_flags_csv", "ysql_yb_enable_ddl_savepoint_support",
         (e, a) -> e + "," + a);
     // (Auto-Analyze #28057) Query plans change after enabling auto analyze.
     flags.put("ysql_enable_auto_analyze", "false");
