@@ -2,7 +2,7 @@
 
 SELECT set_config('search_path','partman, public',false);
 
-SELECT plan(8); -- YB: decreased number of tests
+SELECT plan(9); -- YB: decreased number of tests
 
 -- child table should now be available for data
 INSERT INTO partman_test.time_taptest_table (col3) VALUES (CURRENT_TIMESTAMP + '5 days'::interval);
@@ -30,9 +30,7 @@ SELECT is_empty($$SELECT key
             HAVING count(*)>1$$
     , 'Check that table does not have duped index');
 
--- YB: default partition creation is disabled.
--- TODO(#3109): Re-enable it after transactional DDL support.
--- SELECT is_empty('SELECT * FROM partman_test.time_taptest_table_default', 'Check that default table has had no data inserted to it');
+SELECT is_empty('SELECT * FROM partman_test.time_taptest_table_default', 'Check that default table has had no data inserted to it');
 SELECT results_eq('SELECT count(*)::int FROM partman_test.time_taptest_table_p'||to_char(CURRENT_TIMESTAMP+'5 days'::interval, 'YYYY_MM_DD'), 
     ARRAY[1], 'Check count from time_taptest_table_p'||to_char(CURRENT_TIMESTAMP+'5 days'::interval, 'YYYY_MM_DD'));
 

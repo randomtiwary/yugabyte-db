@@ -16,7 +16,7 @@ CREATE TABLESPACE mytablespace LOCATION ''; -- YB: Requires folder creation for 
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP false \\ -- YB: Not stopping on error as ALTER INDEX to set tablespace for primary key index will fail
 
--- BEGIN; YB: Transactional DDL not supported
+BEGIN;
 SELECT set_config('search_path','partman, public',false);
 
 SELECT plan(74);
@@ -212,5 +212,5 @@ SELECT is_indexed('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMEST
 
 SELECT * FROM finish();
 
--- ROLLBACK; YB: Transactional DDL not supported
+ROLLBACK;
 

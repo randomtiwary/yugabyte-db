@@ -7,10 +7,10 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
--- BEGIN; YB: Transactional DDL not supported
+BEGIN;
 SELECT set_config('search_path','partman, public',false);
 
-SELECT plan(207); -- YB: decreased number of tests
+SELECT plan(224); -- YB: decreased number of tests
 
 CREATE SCHEMA partman_test;
 CREATE SCHEMA partman_retention_test;
@@ -168,7 +168,7 @@ SELECT is_empty('SELECT * FROM ONLY partman_test.time_taptest_table', 'Check tha
 SELECT results_eq('SELECT count(*)::int FROM partman_test.time_taptest_table', ARRAY[10], 'Check count from parent table');
 SELECT results_eq('SELECT count(*)::int FROM partman_test.time_taptest_table_p'||to_char(CURRENT_TIMESTAMP, 'YYYY_MM_DD'), 
     ARRAY[10], 'Check count from time_taptest_table_p'||to_char(CURRENT_TIMESTAMP, 'YYYY_MM_DD'));
-SELECT results_eq('SELECT count(*)::int FROM pg_catalog.pg_publication_tables WHERE pubname = ''partman_test_publication''', ARRAY[9], 'Check that all child tables were added to publication. This test will fail in PG10 since default tables are not supported.');
+SELECT results_eq('SELECT count(*)::int FROM pg_catalog.pg_publication_tables WHERE pubname = ''partman_test_publication''', ARRAY[10], 'Check that all child tables were added to publication. This test will fail in PG10 since default tables are not supported.');
 
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON partman_test.time_taptest_table FROM partman_revoke;
 INSERT INTO partman_test.time_taptest_table (col1, col3) VALUES (generate_series(11,20), CURRENT_TIMESTAMP + '1 day'::interval);
@@ -256,7 +256,7 @@ SELECT col_is_fk('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMESTA
 SELECT is_empty('SELECT * FROM ONLY partman_test.time_taptest_table', 'Check that parent table has had no data inserted to it');
 SELECT results_eq('SELECT count(*)::int FROM partman_test.time_taptest_table_p'||to_char(CURRENT_TIMESTAMP+'5 days'::interval, 'YYYY_MM_DD'), 
     ARRAY[22], 'Check count from time_taptest_table_p'||to_char(CURRENT_TIMESTAMP+'5 days'::interval, 'YYYY_MM_DD'));
-SELECT results_eq('SELECT count(*)::int FROM pg_catalog.pg_publication_tables WHERE pubname = ''partman_test_publication''', ARRAY[15], 'Check that all child tables were added to publication. This test will fail in PG10 since default tables are not supported.');
+SELECT results_eq('SELECT count(*)::int FROM pg_catalog.pg_publication_tables WHERE pubname = ''partman_test_publication''', ARRAY[16], 'Check that all child tables were added to publication. This test will fail in PG10 since default tables are not supported.');
 
 SELECT table_privs_are('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMESTAMP, 'YYYY_MM_DD'), 'partman_basic', ARRAY['SELECT','INSERT','UPDATE'], 
     'Check partman_basic privileges of time_taptest_table_p'||to_char(CURRENT_TIMESTAMP, 'YYYY_MM_DD'));
@@ -303,7 +303,7 @@ SELECT is_empty('SELECT * FROM ONLY partman_test.time_taptest_table', 'Check tha
 SELECT results_eq('SELECT count(*)::int FROM partman_test.time_taptest_table', ARRAY[148], 'Check count from parent table');
 SELECT results_eq('SELECT count(*)::int FROM partman_test.time_taptest_table_p'||to_char(CURRENT_TIMESTAMP+'6 days'::interval, 'YYYY_MM_DD'), 
     ARRAY[28], 'Check count from time_taptest_table_p'||to_char(CURRENT_TIMESTAMP+'6 days'::interval, 'YYYY_MM_DD'));
-SELECT results_eq('SELECT count(*)::int FROM pg_catalog.pg_publication_tables WHERE pubname = ''partman_test_publication''', ARRAY[17], 'Check that all child tables were added to publication. This test will fail in PG10 since default tables are not supported.');
+SELECT results_eq('SELECT count(*)::int FROM pg_catalog.pg_publication_tables WHERE pubname = ''partman_test_publication''', ARRAY[18], 'Check that all child tables were added to publication. This test will fail in PG10 since default tables are not supported.');
 
 SELECT has_table('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMESTAMP+'11 days'::interval, 'YYYY_MM_DD'), 
     'Check time_taptest_table_p'||to_char(CURRENT_TIMESTAMP+'11 days'::interval, 'YYYY_MM_DD')||' exists');
@@ -629,7 +629,9 @@ SELECT hasnt_table('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMES
 SELECT has_table('partman_retention_test', 'time_taptest_table_p'||to_char(CURRENT_TIMESTAMP-'3 days'::interval, 'YYYY_MM_DD'), 
     'Check time_taptest_table_p'||to_char(CURRENT_TIMESTAMP-'3 days'::interval, 'YYYY_MM_DD')||' got moved to new schema');
 
-/* YB: undo_partition not supported
+-- YB: Drop publication before undo so child tables can be dropped (YB forbids DROP of tables in a publication).
+DROP PUBLICATION partman_test_publication;
+
 SELECT undo_partition('partman_test.time_taptest_table', 20, p_target_table := 'partman_test.undo_taptest', p_keep_table := false);
 SELECT results_eq('SELECT count(*)::int FROM  partman_test.undo_taptest', ARRAY[118], 'Check count from target table after undo');
 SELECT hasnt_table('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMESTAMP, 'YYYY_MM_DD'), 
@@ -664,10 +666,7 @@ SELECT hasnt_table('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMES
     'Check time_taptest_table_p'||to_char(CURRENT_TIMESTAMP-'2 days'::interval, 'YYYY_MM_DD')||' does not exist');
 
 SELECT hasnt_table('partman', 'template_partman_test_time_taptest_table', 'Check that template table was dropped');
-*/ -- YB
-
-DROP PUBLICATION partman_test_publication;
 
 SELECT * FROM finish();
--- ROLLBACK; YB: Transactional DDL not supported
+ROLLBACK;
 

@@ -44,9 +44,7 @@ SELECT create_parent('partman_test.time_taptest_table', 'col3', 'native', 'weekl
 
 SELECT is_partitioned('partman_test', 'time_taptest_table', 'Check that time_taptest_table is natively partitioned');
 
--- YB: default partition creation is disabled
--- TODO(#3109): Re-enable it after transactional DDL support.
-SELECT hasnt_table('partman_test', 'time_taptest_table_default', 'Check time_taptest_table_default does not exists');
+SELECT has_table('partman_test', 'time_taptest_table_default', 'Check time_taptest_table_default exists');
 SELECT has_table('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMESTAMP, 'IYYY"w"IW'), 'Check time_taptest_table_'||to_char(CURRENT_TIMESTAMP, 'IYYY"w"IW')||' exists');
 SELECT has_table('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMESTAMP+'1 week'::interval, 'IYYY"w"IW'), 
     'Check time_taptest_table_'||to_char(CURRENT_TIMESTAMP+'1 week'::interval, 'IYYY"w"IW')||' exists (+1 weeks)');

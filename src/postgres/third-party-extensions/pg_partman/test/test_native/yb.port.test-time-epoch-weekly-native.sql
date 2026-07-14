@@ -6,10 +6,10 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
--- BEGIN; YB: Transactional DDL not supported
+BEGIN;
 SELECT set_config('search_path','partman, public',false);
 
-SELECT plan(49); -- YB: decreased number of tests
+SELECT plan(57); -- YB: decreased number of tests
 CREATE SCHEMA partman_test;
 CREATE SCHEMA partman_retention_test;
 
@@ -206,7 +206,6 @@ SELECT hasnt_table('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMES
 SELECT has_table('partman_retention_test', 'time_taptest_table_p'||to_char(CURRENT_TIMESTAMP-'2 weeks'::interval, 'IYYY"w"IW'),
     'Check time_taptest_table_'||to_char(CURRENT_TIMESTAMP-'3 weeks'::interval, 'IYYY"w"IW')||' got moved to new schema after 18 days (1 day past retention + partition size)');
 
-/* YB: undo_partition not supported
 SELECT undo_partition('partman_test.time_taptest_table', 20, p_target_table := 'partman_test.undo_taptest', p_keep_table := false);
 SELECT results_eq('SELECT count(*)::int FROM ONLY partman_test.undo_taptest', ARRAY[60], 'Check count from target table after undo');
 SELECT hasnt_table('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMESTAMP, 'IYYY"w"IW'), 
@@ -223,8 +222,7 @@ SELECT hasnt_table('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMES
     'Check time_taptest_table_'||to_char(CURRENT_TIMESTAMP-'1 week'::interval, 'IYYY"w"IW')||' does not exist (-1 weeks)');
 SELECT hasnt_table('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMESTAMP-'2 weeks'::interval, 'IYYY"w"IW'), 
     'Check time_taptest_table_'||to_char(CURRENT_TIMESTAMP-'2 weeks'::interval, 'IYYY"w"IW')||' does not exist (-2 weeks)');
-*/ -- YB
 
 SELECT * FROM finish();
--- ROLLBACK; YB: Transactional DDL not supported
+ROLLBACK;
 
