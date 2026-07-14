@@ -5,7 +5,7 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
--- BEGIN; YB: Transactional DDL not supported
+BEGIN;
 SELECT set_config('search_path','partman, public',false);
 
 SELECT plan(76);
@@ -221,5 +221,5 @@ SELECT col_is_pk('partman_test', 'time_taptest_table_p'||to_char(CURRENT_TIMESTA
     'Check for primary key in time_taptest_table_p'||to_char(CURRENT_TIMESTAMP+'11 days'::interval, 'YYYY_MM_DD'));
 
 SELECT * FROM finish();
--- ROLLBACK; YB: Transactional DDL not supported
+ROLLBACK;
 

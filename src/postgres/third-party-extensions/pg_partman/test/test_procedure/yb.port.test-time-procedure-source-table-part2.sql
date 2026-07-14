@@ -2,7 +2,7 @@
 
 SELECT set_config('search_path','partman, public',false);
 
-SELECT plan(12); -- YB: decreased number of tests
+SELECT plan(14); -- YB: decreased number of tests
 
 SELECT is_empty('SELECT * FROM partman_test.time_taptest_table_source', 'Check that source table has had data moved to partition');
 
@@ -40,8 +40,6 @@ SELECT results_eq('SELECT count(*)::int FROM partman_test.time_taptest_table_p'|
 UPDATE part_config SET premake = 5 WHERE parent_table = 'partman_test.time_taptest_table';
 
 
-/* YB: default partition creation is disabled.
- * TODO(#3109): Re-enable it after transactional DDL support.
 -- Test native default partition
 INSERT INTO partman_test.time_taptest_table (col3) VALUES (CURRENT_TIMESTAMP + '5 days'::interval);
 SELECT results_eq ('SELECT count(*)::int FROM partman_test.time_taptest_table_default', ARRAY[1], 'Check native default child table for data');
@@ -50,7 +48,6 @@ SELECT results_eq ('SELECT count(*)::int FROM partman_test.time_taptest_table_de
 -- Presence of a default partition will not allow a new child table with a range that contains data located in the default
 DELETE FROM partman_test.time_taptest_table WHERE date_trunc('day', col3) = date_trunc('day', CURRENT_TIMESTAMP + '5 days'::interval);
 SELECT is_empty ('SELECT col1 FROM partman_test.time_taptest_table_default', 'Check native default child table is empty');
-*/ -- YB
 
 SELECT diag('!!! In separate psql terminal, please run the following (adjusting schema if needed): "CALL partman.run_maintenance_proc();".');
 SELECT diag('!!! After that, run part3 of this script to check result !!!');

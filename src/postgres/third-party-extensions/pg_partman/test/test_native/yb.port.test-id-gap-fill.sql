@@ -5,7 +5,7 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
--- BEGIN; YB: Transactional DDL not supported
+BEGIN;
 SELECT set_config('search_path','partman, public',false);
 
 SELECT plan(41); -- YB: decreased number of tests
@@ -115,4 +115,4 @@ SELECT has_table('partman_test', 'id_taptest_table_p3000000050', 'Check id_tapte
 SELECT has_table('partman_test', 'id_taptest_table_p3000000060', 'Check id_taptest_table_p3000000060 was recreated');
 
 SELECT * FROM finish();
--- ROLLBACK; YB: Transactional DDL not supported
+ROLLBACK;

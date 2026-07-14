@@ -1,7 +1,7 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
--- BEGIN; YB: Transactional DDL not supported
+BEGIN;
 
 SELECT set_config('search_path','partman, public',false);
 
@@ -229,4 +229,4 @@ SELECT row_eq(
 
 SELECT * FROM finish();
 
--- ROLLBACK; YB: Transactional DDL not supported
+ROLLBACK;

@@ -4,10 +4,10 @@
 \set ON_ERROR_ROLLBACK 1
 \set ON_ERROR_STOP true
 
--- BEGIN; YB: Transactional DDL not supported
+BEGIN;
 SELECT set_config('search_path','partman, public',false);
 
-SELECT plan(242); -- YB: decreased number of tests
+SELECT plan(306); -- YB: decreased number of tests
 CREATE SCHEMA partman_test;
 
 -- Add back primary key when native supports it
@@ -625,7 +625,6 @@ SELECT is_empty('SELECT parent_table FROM part_config WHERE parent_table = ''tim
 SELECT is_empty('SELECT parent_table FROM part_config WHERE parent_table = ''time_taptest_table_p'||to_char(CURRENT_TIMESTAMP-'4 days'::interval, 'YYYY_MM_DD')||'_p120''',
         'Check time_taptest_table_p'||to_char(CURRENT_TIMESTAMP-'4 days'::interval, 'YYYY_MM_DD')||'_p120 was removed from part_config');
 
-/* YB: undo_partition not supported
 -- First undo all subpartitions
 SELECT undo_partition('partman_test.time_taptest_table_p'||to_char(CURRENT_TIMESTAMP, 'YYYY_MM_DD'), 20, p_target_table := 'partman_test.undo_taptest', p_keep_table := false);
 SELECT undo_partition('partman_test.time_taptest_table_p'||to_char(CURRENT_TIMESTAMP+'1 day'::interval, 'YYYY_MM_DD'), 20, p_target_table := 'partman_test.undo_taptest', p_keep_table := false);
@@ -774,7 +773,6 @@ SELECT results_eq('SELECT count(*)::int FROM ONLY partman_test.time_taptest_tabl
 SELECT results_eq('SELECT count(*)::int FROM partman_test.undo_taptest', ARRAY[248], 'Check count from target of undo_partition');
 
 --Unable to undo_partition any further because col1 is duplicated in child tables, but parent key has it as a primary key. So done testing! :D
-*/ -- YB
 
 SELECT * FROM finish();
--- ROLLBACK; YB: Transactional DDL not supported
+ROLLBACK;
